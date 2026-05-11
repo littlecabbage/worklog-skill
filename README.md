@@ -1,6 +1,10 @@
 # worklog
 
-A Claude Code skill for recording session work logs and maintaining a reusable experience library.
+A shareable Claude Code skill for turning individual working sessions into searchable work logs and reusable engineering knowledge.
+
+`worklog` helps you capture not just what changed, but also what you learned, what you ruled out, and what should be easy to find again later.
+
+## What it does
 
 The skill supports four session modes:
 - `dev`
@@ -8,21 +12,33 @@ The skill supports four session modes:
 - `debug-session`
 - `mixed`
 
-It writes three local artifacts under `~/.claude/worklog` by default:
+By default it writes three local artifacts under `~/.claude/worklog`:
 - `INDEX.md` for human-readable session history
-- `EXPERIENCES.md` for reusable findings and deprecations
-- `index.json` for machine lookup and `jq` queries
+- `EXPERIENCES.md` for reusable findings, lessons, and deprecations
+- `index.json` for machine lookup and `jq`-friendly queries
+
+## Why use it
+
+Most coding sessions produce more than code:
+- implementation decisions
+- source-reading notes
+- debugging pivots
+- partial conclusions
+- reusable experience that should survive the current chat
+
+`worklog` gives Claude Code a consistent way to persist that information locally without mixing it into your repository.
 
 ## Repository layout
 
 ```text
 worklog/
 ├── worklog/                  # Claude skill source
-├── examples/                 # Example JSON payloads for scripts
-└── .github/workflows/        # Validation and packaging workflow
+├── examples/                 # Example JSON payloads for the scripts
+├── tools/                    # Local validation and packaging helpers
+└── .github/workflows/        # CI validation and packaging
 ```
 
-## Install
+## Installation
 
 ### Option 1: copy the skill directory
 
@@ -32,35 +48,43 @@ Copy `worklog/` into your Claude skills directory:
 cp -R worklog ~/.claude/skills/
 ```
 
-### Option 2: package the skill
-
-Package the skill and distribute `worklog.skill`:
+### Option 2: build a distributable `.skill` package
 
 ```bash
 python3 tools/package_skill.py worklog ./dist
 ```
 
-## Initialize the local worklog store
+This creates `dist/worklog.skill`.
+
+## Quick start
+
+### 1. Initialize the local worklog store
 
 ```bash
 python3 worklog/scripts/init_worklog.py
 ```
 
-This creates `~/.claude/worklog/` with:
-- `INDEX.md`
-- `EXPERIENCES.md`
-- `index.json`
-- `archive/`
+This creates:
+- `~/.claude/worklog/INDEX.md`
+- `~/.claude/worklog/EXPERIENCES.md`
+- `~/.claude/worklog/index.json`
+- `~/.claude/worklog/archive/`
 
-## Record one session
-
-Pass a JSON payload to `finish_worklog.py`.
+### 2. Record one session from a JSON payload
 
 ```bash
 python3 worklog/scripts/finish_worklog.py --input examples/mixed-session.json
 ```
 
-Or stream JSON on stdin:
+### 3. Rebuild indexes after manual edits
+
+```bash
+python3 worklog/scripts/reindex_worklog.py
+```
+
+## Example input
+
+You can pass JSON through stdin instead of a file:
 
 ```bash
 python3 worklog/scripts/finish_worklog.py <<'EOF'
@@ -89,15 +113,7 @@ python3 worklog/scripts/finish_worklog.py <<'EOF'
 EOF
 ```
 
-## Rebuild indexes from markdown
-
-```bash
-python3 worklog/scripts/reindex_worklog.py
-```
-
-Use this after manual edits to `EXPERIENCES.md` or if `index.json` drifts.
-
-## Examples
+## Included examples
 
 - `examples/dev-session.json`
 - `examples/read-session.json`
@@ -106,22 +122,23 @@ Use this after manual edits to `EXPERIENCES.md` or if `index.json` drifts.
 
 ## Privacy
 
-This repository shares the skill source code only.
+This repository ships the skill source code only.
 
-It does not upload or sync your real `~/.claude/worklog` data. Do not commit your personal worklog directory unless you intentionally want to publish it.
+It does not upload or sync your real `~/.claude/worklog` data. If you want to share your personal worklog history, do that intentionally through your own storage or version-control workflow.
 
 ## Development
 
-Smoke-test the scripts locally:
+Run a local smoke test:
 
 ```bash
-python3 -m py_compile worklog/scripts/*.py
+python3 -m py_compile worklog/scripts/*.py tools/*.py
 python3 worklog/scripts/init_worklog.py --root /tmp/worklog-test
 python3 worklog/scripts/finish_worklog.py --root /tmp/worklog-test --input examples/mixed-session.json
 python3 worklog/scripts/reindex_worklog.py --root /tmp/worklog-test
+python3 tools/package_skill.py worklog ./dist
 ```
 
-The GitHub Actions workflow validates the skill structure, compiles scripts, and runs an end-to-end smoke test.
+The GitHub Actions workflow validates the skill structure, compiles the scripts, runs an end-to-end smoke test, and packages the skill.
 
 ## License
 
