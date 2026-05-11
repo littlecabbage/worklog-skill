@@ -1,5 +1,7 @@
 # worklog
 
+[中文说明](README.zh.md)
+
 A shareable Claude Code skill for turning individual working sessions into searchable work logs and reusable engineering knowledge.
 
 `worklog` helps you capture not just what changed, but also what you learned, what you ruled out, and what should be easy to find again later.
