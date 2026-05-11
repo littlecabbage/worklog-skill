@@ -59,6 +59,14 @@ python3 tools/package_skill.py worklog ./dist
 
 会生成 `dist/worklog.skill`。
 
+## 30 秒快速开始
+
+```bash
+python3 worklog/scripts/init_worklog.py
+python3 worklog/scripts/finish_worklog.py --input examples/mixed-session.json
+cat ~/.claude/worklog/INDEX.md
+```
+
 ## 快速开始
 
 ### 1. 初始化本地 worklog 存储

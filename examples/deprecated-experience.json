@@ -1,0 +1,10 @@
+{
+  "title": "Legacy cache invalidation note",
+  "body": "~~Invalidate cache only on create~~\n\nThat rule turned out to be incomplete once update paths were introduced.",
+  "tags": ["cache", "deprecated"],
+  "confidence": "medium",
+  "status": "deprecated",
+  "deprecated_at": "2026-05-12",
+  "deprecated_reason": "Update paths also require invalidation.",
+  "search_keywords": ["cache invalidation", "deprecated rule"]
+}

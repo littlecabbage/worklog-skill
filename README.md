@@ -58,6 +58,14 @@ python3 tools/package_skill.py worklog ./dist
 
 This creates `dist/worklog.skill`.
 
+## 30-second quick start
+
+```bash
+python3 worklog/scripts/init_worklog.py
+python3 worklog/scripts/finish_worklog.py --input examples/mixed-session.json
+cat ~/.claude/worklog/INDEX.md
+```
+
 ## Quick start
 
 ### 1. Initialize the local worklog store

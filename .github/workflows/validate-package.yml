@@ -28,6 +28,8 @@ jobs:
           python3 worklog/scripts/init_worklog.py --root "$TEST_ROOT"
           python3 worklog/scripts/finish_worklog.py --root "$TEST_ROOT" --input examples/mixed-session.json
           python3 worklog/scripts/reindex_worklog.py --root "$TEST_ROOT"
+          python3 worklog/scripts/deprecate_experience.py --root "$TEST_ROOT" exp-2026-05-12-001 "obsolete test entry"
+          python3 worklog/scripts/search_worklog.py --root "$TEST_ROOT" cache --type experiences
           test -f "$TEST_ROOT/INDEX.md"
           test -f "$TEST_ROOT/EXPERIENCES.md"
           test -f "$TEST_ROOT/index.json"

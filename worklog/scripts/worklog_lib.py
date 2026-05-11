@@ -11,6 +11,8 @@ from typing import Any
 
 DEFAULT_ROOT = Path.home() / ".claude" / "worklog"
 VALID_MODES = {"dev", "read", "debug-session", "mixed"}
+READ_TYPES = {"survey", "deep-dive", "hunt", "compare"}
+PRIMARY_TYPES = {"dev", "read", "debug"}
 WORKLOG_STATUSES = {"completed", "partial", "paused", "blocked", "abandoned"}
 EXPERIENCE_STATUSES = {"active", "deprecated", "wrong", "evolving"}
 CONFIDENCE_LEVELS = {"high", "medium", "low"}
@@ -334,16 +336,95 @@ def build_worklog_entry(frontmatter: dict[str, Any], relative_path: str) -> dict
     }
 
 
-def validate_payload(payload: dict[str, Any]) -> None:
-    missing = [key for key in ["mode", "project_path", "title", "started_at", "duration_minutes", "status"] if key not in payload]
+def is_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def require_fields(data: dict[str, Any], fields: list[str], context: str) -> None:
+    missing = [field for field in fields if field not in data or is_blank(data.get(field))]
     if missing:
-        raise SystemExit(f"missing keys: {', '.join(missing)}")
+        raise SystemExit(f"{context} requires: {', '.join(missing)}")
+
+
+def require_list(value: Any, name: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise SystemExit(f"{name} must be an array")
+    return value
+
+
+def require_dict(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SystemExit(f"{name} must be an object")
+    return value
+
+
+def validate_experience_inputs(experiences: Any) -> None:
+    require_list(experiences, "experiences")
+    for index, experience in enumerate(experiences, start=1):
+        if not isinstance(experience, dict):
+            raise SystemExit(f"experiences[{index}] must be an object")
+        require_fields(experience, ["title", "body"], f"experiences[{index}]")
+        if "tags" in experience:
+            require_list(experience["tags"], f"experiences[{index}].tags")
+        if "search_keywords" in experience:
+            require_list(experience["search_keywords"], f"experiences[{index}].search_keywords")
+        status = experience.get("status", "active")
+        confidence = experience.get("confidence", "medium")
+        if status not in EXPERIENCE_STATUSES:
+            raise SystemExit(f"experiences[{index}].status must be one of: {', '.join(sorted(EXPERIENCE_STATUSES))}")
+        if confidence not in CONFIDENCE_LEVELS:
+            raise SystemExit(f"experiences[{index}].confidence must be one of: {', '.join(sorted(CONFIDENCE_LEVELS))}")
+
+
+def validate_payload(payload: dict[str, Any]) -> None:
+    require_fields(payload, ["mode", "project_path", "title", "started_at", "duration_minutes", "status"], "worklog payload")
     if payload["mode"] not in VALID_MODES:
-        raise SystemExit(f"invalid mode: {payload['mode']}")
+        raise SystemExit(f"mode must be one of: {', '.join(sorted(VALID_MODES))}")
     if payload["status"] not in WORKLOG_STATUSES:
-        raise SystemExit(f"invalid status: {payload['status']}")
-    if not isinstance(payload.get("tags", []), list):
-        raise SystemExit("tags must be an array")
+        raise SystemExit(f"status must be one of: {', '.join(sorted(WORKLOG_STATUSES))}")
+    require_list(payload.get("tags", []), "tags")
+    try:
+        parse_date(payload["started_at"])
+    except ValueError as exc:
+        raise SystemExit(f"started_at must be ISO 8601: {exc}") from exc
+    if not isinstance(payload["duration_minutes"], int) or payload["duration_minutes"] < 0:
+        raise SystemExit("duration_minutes must be a non-negative integer")
+
+    sections = require_dict(payload.get("sections", {}), "sections")
+    if payload.get("experiences") is not None:
+        validate_experience_inputs(payload["experiences"])
+
+    mode = payload["mode"]
+    if mode == "dev":
+        require_fields(sections, ["goal"], "mode=dev sections")
+        if "commits" in payload and not isinstance(payload["commits"], list):
+            raise SystemExit("mode=dev commits must be an array")
+        if "files_changed" in payload and not isinstance(payload["files_changed"], list):
+            raise SystemExit("mode=dev files_changed must be an array")
+    elif mode == "read":
+        require_fields(payload, ["read_type", "target", "target_version", "completion"], "mode=read")
+        if payload["read_type"] not in READ_TYPES:
+            raise SystemExit(f"mode=read read_type must be one of: {', '.join(sorted(READ_TYPES))}")
+        if not isinstance(payload["completion"], int) or not 0 <= payload["completion"] <= 100:
+            raise SystemExit("mode=read completion must be an integer from 0 to 100")
+        require_fields(sections, ["reading_goal", "mental_model"], "mode=read sections")
+    elif mode == "debug-session":
+        require_fields(payload, ["debug_id"], "mode=debug-session")
+        if payload.get("session_number") is not None and (not isinstance(payload["session_number"], int) or payload["session_number"] <= 0):
+            raise SystemExit("mode=debug-session session_number must be a positive integer")
+        require_fields(sections, ["current_status"], "mode=debug-session sections")
+    elif mode == "mixed":
+        require_fields(payload, ["original_goal", "final_outcome", "primary_type"], "mode=mixed")
+        require_list(payload.get("involved", []), "mode=mixed involved")
+        if payload["primary_type"] not in PRIMARY_TYPES:
+            raise SystemExit(f"mode=mixed primary_type must be one of: {', '.join(sorted(PRIMARY_TYPES))}")
+        require_fields(sections, ["timeline"], "mode=mixed sections")
+        outputs = require_dict(sections.get("outputs", {}), "mode=mixed sections.outputs")
+        require_fields(outputs, ["code", "knowledge", "remaining"], "mode=mixed sections.outputs")
 
 
 def ensure_relative(path: Path, root: Path) -> str:
@@ -593,12 +674,12 @@ def build_experience_record(entry: dict[str, Any], source_map: dict[str, dict[st
     }
 
 
-def reindex(root: Path) -> dict[str, Any]:
+def rebuild_indexes(root: Path, entries: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     ensure_root(root)
     worklog_files = sorted(root.glob("*/*/*.md"))
     worklogs = [parse_worklog_file(path, root) for path in worklog_files if path.name not in {"INDEX.md", "EXPERIENCES.md"}]
     source_map = {item["id"]: item for item in worklogs}
-    experience_entries = parse_experience_entries(root)
+    experience_entries = entries if entries is not None else parse_experience_entries(root)
     experiences_md = render_experiences_md(experience_entries)
     (root / "EXPERIENCES.md").write_text(experiences_md, encoding="utf-8")
     experiences = []
@@ -617,6 +698,17 @@ def reindex(root: Path) -> dict[str, Any]:
     write_index_json(root, index)
     (root / "INDEX.md").write_text(render_index_md(worklogs), encoding="utf-8")
     return index
+
+
+def reindex(root: Path) -> dict[str, Any]:
+    return rebuild_indexes(root)
+
+
+def get_experience_by_id(entries: list[dict[str, Any]], experience_id: str) -> dict[str, Any]:
+    for entry in entries:
+        if entry["id"] == experience_id:
+            return entry
+    raise SystemExit(f"experience not found: {experience_id}")
 
 
 def normalize_experience(exp: dict[str, Any], worklog_id: str, project: str, worklog_relpath: str, date: str, exp_id: str) -> dict[str, Any]:

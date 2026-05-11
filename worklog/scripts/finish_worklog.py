@@ -6,6 +6,7 @@ from pathlib import Path
 
 from worklog_lib import (
     DEFAULT_ROOT,
+    build_experience_record,
     build_worklog_entry,
     build_worklog_frontmatter,
     choose_worklog_file,
@@ -18,6 +19,7 @@ from worklog_lib import (
     normalize_experience,
     parse_experience_entries,
     project_slug,
+    rebuild_indexes,
     refresh_debug_sessions,
     render_experiences_md,
     render_frontmatter,
@@ -26,7 +28,6 @@ from worklog_lib import (
     validate_payload,
     write_index_json,
     compute_stats,
-    build_experience_record,
     find_anchor_line,
 )
 
@@ -78,27 +79,7 @@ def main() -> None:
     frontmatter["produced_experience_ids"] = payload["produced_experience_ids"]
     output_path.write_text(render_frontmatter(frontmatter) + "\n\n" + body + "\n", encoding="utf-8")
 
-    all_entries = existing_entries + new_entries
-    experiences_md = render_experiences_md(all_entries)
-    (root / "EXPERIENCES.md").write_text(experiences_md, encoding="utf-8")
-
-    source_map = {item["id"]: item for item in worklogs}
-    experiences = []
-    for entry in all_entries:
-        line = find_anchor_line(experiences_md, entry["id"])
-        experiences.append(build_experience_record(entry, source_map, line))
-
-    final_index = {
-        "version": 1,
-        "updated_at": index.get("updated_at"),
-        "experiences": sorted(experiences, key=lambda item: (item["date"], item["id"]), reverse=True),
-        "worklogs": sorted(worklogs, key=lambda item: (item["date"], item["id"]), reverse=True),
-        "snippets": payload.get("snippets", index.get("snippets", [])),
-        "debug_sessions": refresh_debug_sessions(worklogs),
-        "stats": compute_stats(worklogs, experiences),
-    }
-    write_index_json(root, final_index)
-    (root / "INDEX.md").write_text(render_index_md(worklogs), encoding="utf-8")
+    rebuild_indexes(root, existing_entries + new_entries)
 
     print(output_path)
 
