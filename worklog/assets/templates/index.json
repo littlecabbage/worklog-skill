@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-11T17:30:00+08:00",
+  "experiences": [
+    {
+      "id": "exp-2026-05-11-001",
+      "title": "SQLAlchemy cascade plus passive_deletes skips ORM delete hooks",
+      "summary": "Deletes may bypass ORM hooks when passive_deletes shifts enforcement to the foreign key.",
+      "tags": ["sqlalchemy", "orm", "audit", "pitfall"],
+      "search_keywords": ["cascade", "passive_deletes", "before_delete"],
+      "project": "my-project",
+      "confidence": "high",
+      "status": "active",
+      "date": "2026-05-11",
+      "location": {
+        "file": "EXPERIENCES.md",
+        "anchor": "exp-2026-05-11-001",
+        "line": 12
+      },
+      "source_worklog_id": "wl-2026-05-11-004",
+      "verified_against": "SQLAlchemy 2.0.30",
+      "last_verified_at": "2026-05-11",
+      "supersedes": null,
+      "superseded_by": null,
+      "ref_count": 0,
+      "pinned": false,
+      "deprecated_at": null,
+      "deprecated_reason": null
+    }
+  ],
+  "worklogs": [
+    {
+      "id": "wl-2026-05-11-004",
+      "date": "2026-05-11",
+      "project": "my-project",
+      "mode": "mixed",
+      "title": "Started soft delete, pivoted into cascade bug fix",
+      "tags": ["dev", "read", "debug", "sqlalchemy"],
+      "duration_minutes": 135,
+      "status": "partial",
+      "file": "./my-project/2026-05-11/cascade-bug.md",
+      "debug_id": null,
+      "session_number": null,
+      "commits": ["abc123", "def456"],
+      "produced_experience_ids": ["exp-2026-05-11-001"]
+    }
+  ],
+  "snippets": [
+    {
+      "id": "snip-2026-05-11-001",
+      "purpose": "Safe SQLAlchemy cascade setup",
+      "language": "python",
+      "tags": ["sqlalchemy", "snippet"],
+      "location": {
+        "file": "./my-project/2026-05-11/cascade-bug.md",
+        "lines": "42-68"
+      }
+    }
+  ],
+  "debug_sessions": [
+    {
+      "debug_id": "dbg-2026-05-08-cascade-delete",
+      "title": "Cascade delete drops audit hooks",
+      "status": "in_progress",
+      "session_count": 3,
+      "first_seen": "2026-05-08",
+      "last_seen": "2026-05-11",
+      "worklog_ids": ["wl-2026-05-08-002", "wl-2026-05-09-001", "wl-2026-05-11-003"],
+      "linked_debug_doc": null
+    }
+  ],
+  "stats": {
+    "by_tag": {"sqlalchemy": 3, "react": 2},
+    "by_project": {"my-project": 4},
+    "by_status": {"active": 1, "deprecated": 0},
+    "by_mode": {"dev": 1, "read": 1, "debug-session": 1, "mixed": 1}
+  }
+}

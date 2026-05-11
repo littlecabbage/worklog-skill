@@ -1,0 +1,43 @@
+{
+  "mode": "mixed",
+  "project_path": "/path/to/project",
+  "title": "Started feature work and pivoted into a bug fix",
+  "started_at": "2026-05-12T10:00:00+08:00",
+  "duration_minutes": 95,
+  "status": "partial",
+  "tags": ["dev", "debug", "backend"],
+  "original_goal": "Add feature flag support",
+  "final_outcome": "Fixed an existing cache invalidation bug and postponed the feature",
+  "involved": ["dev", "debug"],
+  "primary_type": "debug",
+  "sections": {
+    "timeline": [
+      "**[dev]** Started wiring the feature flag gate.",
+      "**[debug]** Pivot: found stale cache behavior during manual verification.",
+      "**[dev]** Added a fix and postponed the original feature work."
+    ],
+    "key_decisions": [
+      {
+        "time": "10:35",
+        "decision": "Fix the stale cache bug first",
+        "why": "The new feature would have amplified bad behavior"
+      }
+    ],
+    "outputs": {
+      "code": "Patched cache invalidation path",
+      "knowledge": "Confirmed stale cache came from missing delete on update",
+      "remaining": "Revisit feature flag support"
+    },
+    "experience_candidates": ["Cache invalidation bugs are easier to spot while validating adjacent features."]
+  },
+  "experiences": [
+    {
+      "title": "Cache invalidation bugs often surface during unrelated feature validation",
+      "body": "Manual verification for a new feature is a good time to watch for stale reads in adjacent paths.",
+      "tags": ["cache", "debug", "pitfall"],
+      "confidence": "medium",
+      "status": "active",
+      "search_keywords": ["stale cache", "invalidation", "feature validation"]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+name: validate-package
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile scripts
+        run: python3 -m py_compile worklog/scripts/*.py tools/*.py
+
+      - name: Validate skill structure
+        run: python3 tools/quick_validate.py worklog
+
+      - name: Smoke test scripts
+        run: |
+          TEST_ROOT="/tmp/worklog-test"
+          python3 worklog/scripts/init_worklog.py --root "$TEST_ROOT"
+          python3 worklog/scripts/finish_worklog.py --root "$TEST_ROOT" --input examples/mixed-session.json
+          python3 worklog/scripts/reindex_worklog.py --root "$TEST_ROOT"
+          test -f "$TEST_ROOT/INDEX.md"
+          test -f "$TEST_ROOT/EXPERIENCES.md"
+          test -f "$TEST_ROOT/index.json"
+
+      - name: Package skill
+        run: python3 tools/package_skill.py worklog ./dist

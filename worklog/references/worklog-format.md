@@ -1,0 +1,160 @@
+# Worklog format reference
+
+## File layout
+
+```text
+~/.claude/worklog/
+├── INDEX.md
+├── EXPERIENCES.md
+├── index.json
+├── <project-slug>/
+│   └── YYYY-MM-DD/
+│       └── <task-slug>.md
+└── archive/
+```
+
+## Common worklog frontmatter
+
+Required:
+- `id`
+- `mode`
+- `project`
+- `project_path`
+- `title`
+- `started_at`
+- `duration_minutes`
+- `status`
+- `tags`
+
+## Mode-specific fields
+
+### `dev`
+- `branch`
+- `commits[]`
+- `files_changed[]`
+- `loc.added`
+- `loc.deleted`
+- `pr_url`
+
+### `read`
+- `read_type` (`survey` | `deep-dive` | `hunt` | `compare`)
+- `target`
+- `target_version`
+- `completion`
+
+### `debug-session`
+- `debug_id`
+- `session_number`
+- `linked_debug_doc`
+
+### `mixed`
+- `original_goal`
+- `final_outcome`
+- `involved[]`
+- `primary_type`
+
+## Body sections
+
+### `dev`
+- 目标
+- 完成情况
+- 关键决策
+- 学到 / 经验候选
+- 遗留 TODO
+- 参考
+
+### `read`
+- 阅读目标
+- 入口与路径
+- 一句话心智模型
+- 关键发现
+- 未解 / 下次继续
+- 引用证据
+- 衍生产出
+
+### `debug-session`
+- 历次会话
+- 本次进展
+- 当前状态
+- 下次会话从这里继续
+- 假设池摘要
+- 经验候选
+
+### `mixed`
+- 主线时间线
+- 关键决策
+- 产出
+- 经验候选
+
+## EXPERIENCES.md rules
+
+- Prepend new entries under the newest date block.
+- Keep the original wording when deprecating.
+- Use `~~...~~` for stale or wrong content.
+- Keep source links to the original worklog.
+- Put a YAML metadata comment above every experience block.
+
+### Metadata comment
+
+```html
+<!-- exp-meta:
+id: exp-YYYY-MM-DD-NNN
+tags: [tag1, tag2]
+project: my-project
+confidence: high
+status: active
+verified_against: version-or-commit
+last_verified_at: YYYY-MM-DD
+supersedes: null
+superseded_by: null
+pinned: false
+deprecated_at: null
+deprecated_reason: null
+-->
+```
+
+## index.json schema
+
+Top-level keys:
+- `version`
+- `updated_at`
+- `experiences[]`
+- `worklogs[]`
+- `snippets[]`
+- `debug_sessions[]`
+- `stats`
+
+### Experience fields
+- `id`
+- `title`
+- `summary`
+- `tags[]`
+- `search_keywords[]`
+- `project`
+- `confidence`
+- `status`
+- `date`
+- `location.file`
+- `location.anchor`
+- `location.line`
+- `source_worklog_id`
+- `verified_against`
+- `last_verified_at`
+- `supersedes`
+- `superseded_by`
+- `ref_count`
+- `pinned`
+- `deprecated_at`
+- `deprecated_reason`
+
+## jq patterns
+
+```bash
+jq '.experiences[] | select(.status=="active" and (.tags|index("sqlalchemy"))) | {id,title,location}' ~/.claude/worklog/index.json
+jq '.worklogs[] | select(.project=="my-project") | {id,date,mode,title,file}' ~/.claude/worklog/index.json
+jq '.experiences[] | select(.confidence=="high") | {id,title,location}' ~/.claude/worklog/index.json
+```
+
+## Retrieval rule
+
+Use `jq` to shortlist candidates first, then read only the matching markdown anchor or line range.
