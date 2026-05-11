@@ -20,9 +20,19 @@
 - `EXPERIENCES.md`：可复用的经验、教训和过期条目
 - `index.json`：给机器检索和 `jq` 查询用的索引
 
-## 为什么值得用
+## 在 Claude Code 中使用
 
-一次编码会话通常产出的不只是代码，还包括：
+1. 把 `worklog/` 复制到 `~/.claude/skills/`。
+2. 正常启动 Claude Code。
+3. 直接对 Claude 说，例如：
+   - “把这次会话记录成 mixed worklog。”
+   - “保存这次 debug 会话。”
+   - “查一下以前关于 cache invalidation 的经验。”
+   - “把 passive_deletes 那条经验标记过期。”
+4. Claude 会自动选择合适的模式、收集会话信息，并更新本地 worklog 文件。
+
+需要自动化、CI、批量导入或手动重建索引时，再直接运行脚本。
+
 - 关键决策
 - 阅读源码笔记
 - 调试过程中的转折点

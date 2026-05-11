@@ -19,9 +19,19 @@ By default it writes three local artifacts under `~/.claude/worklog`:
 - `EXPERIENCES.md` for reusable findings, lessons, and deprecations
 - `index.json` for machine lookup and `jq`-friendly queries
 
-## Why use it
+## Using this skill in Claude Code
 
-Most coding sessions produce more than code:
+1. Copy `worklog/` into `~/.claude/skills/`.
+2. Start Claude Code normally.
+3. Ask Claude in natural language, for example:
+   - "Record this session as a mixed worklog."
+   - "Save this debugging session."
+   - "Search prior experiences about cache invalidation."
+   - "Deprecate the passive_deletes experience."
+4. Claude will choose the right mode, collect the session facts, and update the local worklog files.
+
+Use the helper scripts directly when you want automation, CI, bulk import, or manual reindexing.
+
 - implementation decisions
 - source-reading notes
 - debugging pivots
