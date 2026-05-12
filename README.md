@@ -14,10 +14,15 @@ The skill supports four session modes:
 - `debug-session`
 - `mixed`
 
-By default it writes three local artifacts under `~/.claude/worklog`:
+By default it writes project-local artifacts under the current repository's `.worklog/` directory:
 - `INDEX.md` for human-readable session history
 - `EXPERIENCES.md` for reusable findings, lessons, and deprecations
 - `index.json` for machine lookup and `jq`-friendly queries
+
+Root selection is local-first:
+- default: nearest git repository's `.worklog/`
+- outside git: current directory's `.worklog/`
+- explicit global override: pass `--root ~/.claude/worklog`
 
 ## Using this skill in Claude Code
 
@@ -42,7 +47,7 @@ Use the helper scripts directly when you want automation, CI, bulk import, or ma
 - partial conclusions
 - reusable experience that should survive the current chat
 
-`worklog` gives Claude Code a consistent way to persist that information locally without mixing it into your repository.
+`worklog` gives Claude Code a consistent way to persist that information locally beside the project context. Add `.worklog/` to `.gitignore` for private logs, or commit selected logs intentionally when a project should carry its own history.
 
 ## Repository layout
 
@@ -77,7 +82,7 @@ This creates `dist/worklog.skill`.
 ```bash
 python3 worklog/scripts/init_worklog.py
 python3 worklog/scripts/finish_worklog.py --input examples/mixed-session.json
-cat ~/.claude/worklog/INDEX.md
+cat .worklog/INDEX.md
 ```
 
 ## Quick start
@@ -89,10 +94,10 @@ python3 worklog/scripts/init_worklog.py
 ```
 
 This creates:
-- `~/.claude/worklog/INDEX.md`
-- `~/.claude/worklog/EXPERIENCES.md`
-- `~/.claude/worklog/index.json`
-- `~/.claude/worklog/archive/`
+- `.worklog/INDEX.md`
+- `.worklog/EXPERIENCES.md`
+- `.worklog/index.json`
+- `.worklog/archive/`
 
 ### 2. Record one session from a JSON payload
 
@@ -155,7 +160,7 @@ EOF
 
 This repository ships the skill source code only.
 
-It does not upload or sync your real `~/.claude/worklog` data. If you want to share your personal worklog history, do that intentionally through your own storage or version-control workflow.
+It does not upload or sync your project `.worklog/` data. If you want to share worklog history, do that intentionally through your own storage or version-control workflow.
 
 ## Development
 

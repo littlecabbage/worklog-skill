@@ -3,15 +3,16 @@
 ## 文件布局
 
 ```text
-~/.claude/worklog/
+<project-root>/.worklog/
 ├── INDEX.md
 ├── EXPERIENCES.md
 ├── index.json
-├── <project-slug>/
-│   └── YYYY-MM-DD/
-│       └── <task-slug>.md
+├── YYYY-MM-DD/
+│   └── <task-slug>.md
 └── archive/
 ```
+
+默认 root 是项目本地：最近 git 仓库的 `.worklog/`；如果不在 git 仓库中，则使用当前目录的 `.worklog/`。只有明确传入 `--root ~/.claude/worklog` 时，才使用全局的本机 store；显式全局 root 会保留 `<project-slug>/YYYY-MM-DD/<task-slug>.md` 分组。
 
 ## 通用 worklog frontmatter
 
@@ -166,9 +167,9 @@ deprecated_reason: null
 ## jq 模式
 
 ```bash
-jq '.experiences[] | select(.status=="active" and (.tags|index("sqlalchemy"))) | {id,title,location}' ~/.claude/worklog/index.json
-jq '.worklogs[] | select(.project=="my-project") | {id,date,mode,title,file}' ~/.claude/worklog/index.json
-jq '.experiences[] | select(.confidence=="high") | {id,title,location}' ~/.claude/worklog/index.json
+jq '.experiences[] | select(.status=="active" and (.tags|index("sqlalchemy"))) | {id,title,location}' .worklog/index.json
+jq '.worklogs[] | select(.project=="my-project") | {id,date,mode,title,file}' .worklog/index.json
+jq '.experiences[] | select(.confidence=="high") | {id,title,location}' .worklog/index.json
 ```
 
 ## 检索规则

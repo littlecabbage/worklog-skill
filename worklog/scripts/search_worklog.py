@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 
-from worklog_lib import DEFAULT_ROOT, load_index_json
+from worklog_lib import GLOBAL_ROOT, load_index_json, root_path
 
 
 def matches_text(item: dict, query: str) -> bool:
@@ -23,13 +22,13 @@ def matches_text(item: dict, query: str) -> bool:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Search worklog experiences and sessions")
     parser.add_argument("query", nargs="?", default="")
-    parser.add_argument("--root", default=str(DEFAULT_ROOT), help="worklog root directory")
+    parser.add_argument("--root", help=f"worklog root directory; defaults to the current project .worklog; use {GLOBAL_ROOT} for a global store")
     parser.add_argument("--tag")
     parser.add_argument("--project")
     parser.add_argument("--type", choices=["experiences", "worklogs"], default="experiences")
     args = parser.parse_args()
 
-    root = Path(args.root).expanduser()
+    root = root_path(args.root)
     index = load_index_json(root)
     items = index[args.type]
 

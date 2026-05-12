@@ -3,15 +3,16 @@
 ## File layout
 
 ```text
-~/.claude/worklog/
+<project-root>/.worklog/
 ├── INDEX.md
 ├── EXPERIENCES.md
 ├── index.json
-├── <project-slug>/
-│   └── YYYY-MM-DD/
-│       └── <task-slug>.md
+├── YYYY-MM-DD/
+│   └── <task-slug>.md
 └── archive/
 ```
+
+The default root is project-local: the nearest git repository's `.worklog/`, or the current directory's `.worklog/` when no git root is found. Pass `--root ~/.claude/worklog` to intentionally use a global machine-local store; explicit global roots preserve `<project-slug>/YYYY-MM-DD/<task-slug>.md` grouping.
 
 ## Common worklog frontmatter
 
@@ -166,9 +167,9 @@ Top-level keys:
 ## jq patterns
 
 ```bash
-jq '.experiences[] | select(.status=="active" and (.tags|index("sqlalchemy"))) | {id,title,location}' ~/.claude/worklog/index.json
-jq '.worklogs[] | select(.project=="my-project") | {id,date,mode,title,file}' ~/.claude/worklog/index.json
-jq '.experiences[] | select(.confidence=="high") | {id,title,location}' ~/.claude/worklog/index.json
+jq '.experiences[] | select(.status=="active" and (.tags|index("sqlalchemy"))) | {id,title,location}' .worklog/index.json
+jq '.worklogs[] | select(.project=="my-project") | {id,date,mode,title,file}' .worklog/index.json
+jq '.experiences[] | select(.confidence=="high") | {id,title,location}' .worklog/index.json
 ```
 
 ## Retrieval rule

@@ -15,10 +15,15 @@
 - `debug-session`
 - `mixed`
 
-默认会把内容写到本地 `~/.claude/worklog`：
+默认会把内容写到当前仓库的 `.worklog/` 目录：
 - `INDEX.md`：人类可读的会话索引
 - `EXPERIENCES.md`：可复用的经验、教训和过期条目
 - `index.json`：给机器检索和 `jq` 查询用的索引
+
+root 选择遵循 local-first：
+- 默认：最近的 git 仓库 `.worklog/`
+- 不在 git 仓库中：当前目录 `.worklog/`
+- 显式全局覆盖：传入 `--root ~/.claude/worklog`
 
 ## 在 Claude Code 中使用
 
@@ -43,7 +48,7 @@
 - 还没做完的结论
 - 值得长期保留的经验
 
-`worklog` 让 Claude Code 用统一方式把这些内容保存在本地，而不是散落在聊天记录里。
+`worklog` 让 Claude Code 用统一方式把这些内容保存在项目上下文旁边。私有日志可以把 `.worklog/` 加入 `.gitignore`；如果某个项目需要携带历史，也可以有意识地提交选中的日志。
 
 ## 仓库结构
 
@@ -78,7 +83,7 @@ python3 tools/package_skill.py worklog ./dist
 ```bash
 python3 worklog/scripts/init_worklog.py
 python3 worklog/scripts/finish_worklog.py --input examples/mixed-session.json
-cat ~/.claude/worklog/INDEX.md
+cat .worklog/INDEX.md
 ```
 
 ## 快速开始
@@ -90,10 +95,10 @@ python3 worklog/scripts/init_worklog.py
 ```
 
 会创建：
-- `~/.claude/worklog/INDEX.md`
-- `~/.claude/worklog/EXPERIENCES.md`
-- `~/.claude/worklog/index.json`
-- `~/.claude/worklog/archive/`
+- `.worklog/INDEX.md`
+- `.worklog/EXPERIENCES.md`
+- `.worklog/index.json`
+- `.worklog/archive/`
 
 ### 2. 记录一次会话
 
@@ -154,9 +159,9 @@ EOF
 
 ## 隐私
 
-这个仓库只发布 skill 源码，不会上传或同步你真实的 `~/.claude/worklog` 数据。
+这个仓库只发布 skill 源码，不会上传或同步你的项目 `.worklog/` 数据。
 
-如果你想分享个人 worklog 历史，请通过自己的存储或版本控制流程有意识地发布。
+如果你想分享 worklog 历史，请通过自己的存储或版本控制流程有意识地发布。
 
 ## 开发
 

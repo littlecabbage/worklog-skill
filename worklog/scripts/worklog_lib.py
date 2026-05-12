@@ -4,12 +4,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_ROOT = Path.home() / ".claude" / "worklog"
+GLOBAL_ROOT = Path.home() / ".claude" / "worklog"
+WORKLOG_DIR_NAME = ".worklog"
+DEFAULT_ROOT = Path(WORKLOG_DIR_NAME)
 VALID_MODES = {"dev", "read", "debug-session", "mixed"}
 READ_TYPES = {"survey", "deep-dive", "hunt", "compare"}
 PRIMARY_TYPES = {"dev", "read", "debug"}
@@ -24,8 +27,39 @@ DEFAULT_TAGS_BY_MODE = {
 }
 
 
-def root_path(value: str | None = None) -> Path:
-    return Path(value).expanduser() if value else DEFAULT_ROOT
+def find_git_root(start: Path | None = None) -> Path | None:
+    current = (start or Path.cwd()).expanduser()
+    if current.is_file():
+        current = current.parent
+    current = current.resolve()
+    for candidate in [current, *current.parents]:
+        if (candidate / ".git").exists():
+            return candidate
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=current,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    output = result.stdout.strip()
+    return Path(output).expanduser().resolve() if output else None
+
+
+def default_project_root(start: str | Path | None = None) -> Path:
+    start_path = Path(start).expanduser() if start else Path.cwd()
+    if start and not start_path.exists():
+        start_path = Path.cwd()
+    git_root = find_git_root(start_path)
+    base = git_root or (start_path if start_path.is_dir() else start_path.parent)
+    return (base / WORKLOG_DIR_NAME).resolve()
+
+
+def root_path(value: str | None = None, start: str | Path | None = None) -> Path:
+    return Path(value).expanduser() if value else default_project_root(start)
 
 
 def ensure_root(root: Path) -> None:
@@ -776,7 +810,7 @@ def build_experience_record(entry: dict[str, Any], source_map: dict[str, dict[st
 
 def rebuild_indexes(root: Path, entries: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     ensure_root(root)
-    worklog_files = sorted(root.glob("*/*/*.md"))
+    worklog_files = sorted({*root.glob("*/*.md"), *root.glob("*/*/*.md")})
     worklogs = [parse_worklog_file(path, root) for path in worklog_files if path.name not in {"INDEX.md", "EXPERIENCES.md"}]
     source_map = {item["id"]: item for item in worklogs}
     experience_entries = entries if entries is not None else parse_experience_entries(root)

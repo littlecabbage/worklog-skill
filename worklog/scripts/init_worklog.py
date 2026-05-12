@@ -2,17 +2,16 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
-from worklog_lib import DEFAULT_ROOT, ensure_root, write_json
+from worklog_lib import GLOBAL_ROOT, ensure_root, root_path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Initialize ~/.claude/worklog structure")
-    parser.add_argument("--root", default=str(DEFAULT_ROOT), help="worklog root directory")
+    parser = argparse.ArgumentParser(description="Initialize project-local .worklog structure")
+    parser.add_argument("--root", help=f"worklog root directory; defaults to the current project .worklog; use {GLOBAL_ROOT} for a global store")
     args = parser.parse_args()
 
-    root = Path(args.root).expanduser()
+    root = root_path(args.root)
     ensure_root(root)
     print(root)
 

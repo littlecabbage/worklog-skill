@@ -2,46 +2,39 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from worklog_lib import (
-    DEFAULT_ROOT,
-    build_experience_record,
     build_worklog_entry,
     build_worklog_frontmatter,
     choose_worklog_file,
+    GLOBAL_ROOT,
     date_only,
     ensure_relative,
     ensure_root,
-    load_index_json,
     load_input,
+    load_index_json,
     next_id,
     normalize_experience,
     parse_experience_entries,
     project_slug,
     rebuild_indexes,
-    refresh_debug_sessions,
-    render_experiences_md,
     render_frontmatter,
-    render_index_md,
     render_worklog_body,
+    root_path,
     validate_payload,
-    write_index_json,
-    compute_stats,
-    find_anchor_line,
 )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Append a worklog and update indexes")
-    parser.add_argument("--root", default=str(DEFAULT_ROOT), help="worklog root directory")
+    parser.add_argument("--root", help=f"worklog root directory; defaults to the current project .worklog; use {GLOBAL_ROOT} for a global store")
     parser.add_argument("--input", help="path to input JSON; otherwise read stdin")
     args = parser.parse_args()
 
     payload = load_input(args.input)
     validate_payload(payload)
 
-    root = Path(args.root).expanduser()
+    root = root_path(args.root, payload["project_path"])
     ensure_root(root)
     index = load_index_json(root)
 
@@ -57,7 +50,7 @@ def main() -> None:
     frontmatter = build_worklog_frontmatter(payload, worklog_id, project)
     body = render_worklog_body(payload)
 
-    directory = root / project / day
+    directory = root / project / day if args.root else root / day
     directory.mkdir(parents=True, exist_ok=True)
     output_path = choose_worklog_file(directory, payload["title"])
     output_path.write_text(render_frontmatter(frontmatter) + "\n\n" + body + "\n", encoding="utf-8")

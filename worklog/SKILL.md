@@ -1,6 +1,6 @@
 ---
 name: worklog
-description: Persist and retrieve Claude Code work logs and reusable experiences under ~/.claude/worklog. Use when the user wants to record a coding session, source-reading session, debug session, or mixed session; when a task mixes development, reading, and debugging; when adding, deprecating, or superseding experience entries; or when searching prior work via index.json and jq.
+description: Persist and retrieve Claude Code work logs and reusable experiences under the current project's .worklog directory by default. Use when the user wants to record a coding session, source-reading session, debug session, or mixed session; when a task mixes development, reading, and debugging; when adding, deprecating, or superseding experience entries; or when searching prior work via index.json and jq.
 ---
 
 # Worklog
@@ -14,7 +14,7 @@ description: Persist and retrieve Claude Code work logs and reusable experiences
    - 3-6 session summary bullets
    - 0-2 experience candidates marked as pending
 4. Ask only one question by default: "Save this draft, edit mode/title/tags, or discard it?"
-5. Write the session log to `~/.claude/worklog/<project-slug>/YYYY-MM-DD/<task-slug>.md` only after confirmation.
+5. Write the session log to `<project-root>/.worklog/YYYY-MM-DD/<task-slug>.md` only after confirmation.
 6. Update `INDEX.md` in newest-first order.
 7. Promote reusable findings into `EXPERIENCES.md` and `index.json` only when the user explicitly confirms the experience candidates.
 8. Search `index.json` with `jq` before reading older markdown in full.
@@ -42,6 +42,8 @@ Score every candidate mode from evidence:
 Prefer `mixed` as the fallback instead of introducing a new general mode. Include `mode_confidence` as `high`, `medium`, or `low`, and include `mode_evidence` in the JSON payload when saving.
 
 ## Record rules
+- Default to project-local storage. Resolve the root as the nearest git repository's `.worklog/`; if no git root exists, use the current directory's `.worklog/`.
+- Use `--root ~/.claude/worklog` only when the user explicitly asks for a global local store; global stores keep the old `<project-slug>/YYYY-MM-DD/<task-slug>.md` grouping.
 - Keep human-readable markdown newest-first.
 - Keep `index.json` as the machine lookup layer.
 - Preserve links to the original worklog and to the exact markdown anchor or line range.
@@ -58,11 +60,12 @@ Prefer `mixed` as the fallback instead of introducing a new general mode. Includ
 - Rebuild `index.json` from markdown metadata if it drifts.
 
 ## Scripts
-- Run `python3 scripts/init_worklog.py` to initialize `~/.claude/worklog`.
+- Run `python3 scripts/init_worklog.py` to initialize the current project's `.worklog/`.
 - Run `python3 scripts/finish_worklog.py --input <file.json>` or pipe JSON on stdin to append one worklog, update `INDEX.md`, update `EXPERIENCES.md`, and refresh `index.json`.
 - The script accepts draft-first payloads with missing optional fields and fills safe defaults before validation. Still provide richer fields when context supports them.
 - Run `python3 scripts/reindex_worklog.py` to rebuild `INDEX.md` and `index.json` from markdown.
 - Use JSON input for deterministic writes. Prefer generating the JSON payload in-memory or through a temp file rather than editing markdown manually.
+- Pass `--root ~/.claude/worklog` when a global machine-local worklog is intentionally desired.
 
 ## Reference
 - See `references/worklog-format.md` for the exact schema, metadata comment format, and jq query patterns.
