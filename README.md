@@ -24,11 +24,15 @@ By default it writes three local artifacts under `~/.claude/worklog`:
 1. Copy `worklog/` into `~/.claude/skills/`.
 2. Start Claude Code normally.
 3. Ask Claude in natural language, for example:
+   - "Record this session."
+   - "Save a worklog for what we just did."
    - "Record this session as a mixed worklog."
    - "Save this debugging session."
    - "Search prior experiences about cache invalidation."
    - "Deprecate the passive_deletes experience."
-4. Claude will choose the right mode, collect the session facts, and update the local worklog files.
+4. Claude will infer the mode, draft a save-ready summary from context, and ask one compact confirmation before writing.
+
+The default interaction is context-first and draft-first. `/worklog` should not start by asking you to fill title, status, tags, and sections. It should first show the inferred mode, evidence, title, summary bullets, and pending experience candidates. Use `/worklog edit` or `/worklog guided` only when you want detailed field-by-field control.
 
 Use the helper scripts directly when you want automation, CI, bulk import, or manual reindexing.
 
@@ -96,6 +100,12 @@ This creates:
 python3 worklog/scripts/finish_worklog.py --input examples/mixed-session.json
 ```
 
+Draft-first payloads can omit fields that Claude can safely default:
+
+```bash
+python3 worklog/scripts/finish_worklog.py --input examples/minimal-draft.json
+```
+
 ### 3. Rebuild indexes after manual edits
 
 ```bash
@@ -139,6 +149,7 @@ EOF
 - `examples/read-session.json`
 - `examples/debug-session.json`
 - `examples/mixed-session.json`
+- `examples/minimal-draft.json`
 
 ## Privacy
 

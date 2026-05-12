@@ -26,6 +26,20 @@
 - `status`
 - `tags`
 
+draft-first 的脚本输入可以省略大部分字段。`finish_worklog.py` 会在校验前补安全默认值：
+- `mode`：`mixed`
+- `project_path`：当前工作目录
+- `title`：`Worklog draft`
+- `started_at`：当前本地时间
+- `duration_minutes`：`0`
+- `status`：`partial`
+- `tags`：按 mode 派生
+
+可选草稿元数据：
+- `mode_confidence`（`high` | `medium` | `low`）
+- `mode_evidence[]`
+- `draft_confirmed`
+
 ## 各模式字段
 
 ### `dev`
@@ -52,6 +66,8 @@
 - `final_outcome`
 - `involved[]`
 - `primary_type`
+
+字段未知时，优先生成一个结构完整的草稿并使用默认值，不要把用户阻塞在填表流程里。只有 mode 低置信度或准备正式写入经验库时，才做有针对性的追问。
 
 ## 正文结构
 

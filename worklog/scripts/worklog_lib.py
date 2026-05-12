@@ -16,6 +16,12 @@ PRIMARY_TYPES = {"dev", "read", "debug"}
 WORKLOG_STATUSES = {"completed", "partial", "paused", "blocked", "abandoned"}
 EXPERIENCE_STATUSES = {"active", "deprecated", "wrong", "evolving"}
 CONFIDENCE_LEVELS = {"high", "medium", "low"}
+DEFAULT_TAGS_BY_MODE = {
+    "dev": ["dev"],
+    "read": ["read"],
+    "debug-session": ["debug"],
+    "mixed": ["mixed"],
+}
 
 
 def root_path(value: str | None = None) -> Path:
@@ -98,6 +104,99 @@ def load_input(path: str | None) -> dict[str, Any]:
     if not raw:
         raise SystemExit("missing input JSON")
     return json.loads(raw)
+
+
+def set_default_if_blank(data: dict[str, Any], key: str, value: Any) -> None:
+    if key not in data or is_blank(data.get(key)):
+        data[key] = value
+
+
+def ensure_sections(payload: dict[str, Any]) -> dict[str, Any]:
+    sections = payload.get("sections")
+    if not isinstance(sections, dict):
+        sections = {}
+        payload["sections"] = sections
+    return sections
+
+
+def default_debug_id(payload: dict[str, Any]) -> str:
+    day = date_only(payload["started_at"])
+    return f"dbg-{day}-{slugify(payload['title'])}"
+
+
+def first_valid_primary_type(values: Any) -> str | None:
+    if not isinstance(values, list):
+        return None
+    normalized = ["debug" if item == "debug-session" else item for item in values]
+    for candidate in ("debug", "dev", "read"):
+        if candidate in normalized:
+            return candidate
+    return None
+
+
+def apply_payload_defaults(payload: dict[str, Any]) -> dict[str, Any]:
+    set_default_if_blank(payload, "mode", "mixed")
+    set_default_if_blank(payload, "project_path", os.getcwd())
+    set_default_if_blank(payload, "title", "Worklog draft")
+    set_default_if_blank(payload, "started_at", iso_now())
+    set_default_if_blank(payload, "duration_minutes", 0)
+    set_default_if_blank(payload, "status", "partial")
+
+    mode = payload.get("mode")
+    if not isinstance(payload.get("tags"), list):
+        payload["tags"] = []
+    if not payload["tags"] and mode in DEFAULT_TAGS_BY_MODE:
+        payload["tags"] = list(DEFAULT_TAGS_BY_MODE[mode])
+
+    sections = ensure_sections(payload)
+    if mode == "dev":
+        set_default_if_blank(sections, "goal", payload["title"])
+        sections.setdefault("completed", [])
+        sections.setdefault("key_decisions", [])
+        sections.setdefault("learned", sections.get("experience_candidates", []))
+        sections.setdefault("remaining_todos", [])
+        sections.setdefault("references", [])
+        payload.setdefault("commits", [])
+        payload.setdefault("files_changed", [])
+        payload.setdefault("loc", {"added": 0, "deleted": 0})
+    elif mode == "read":
+        set_default_if_blank(payload, "read_type", "survey")
+        set_default_if_blank(payload, "target", project_slug(payload["project_path"], payload.get("project")))
+        set_default_if_blank(payload, "target_version", "unknown")
+        set_default_if_blank(payload, "completion", 0)
+        set_default_if_blank(sections, "reading_goal", payload["title"])
+        sections.setdefault("entry_points", [])
+        set_default_if_blank(sections, "mental_model", "Pending confirmation.")
+        sections.setdefault("key_findings", [])
+        sections.setdefault("open_questions", [])
+        sections.setdefault("evidence", [])
+        sections.setdefault("follow_on_output", [])
+    elif mode == "debug-session":
+        set_default_if_blank(payload, "debug_id", default_debug_id(payload))
+        sections.setdefault("prior_sessions", [])
+        sections.setdefault("progress", [])
+        set_default_if_blank(sections, "current_status", "Pending confirmation.")
+        sections.setdefault("resume_here", [])
+        sections.setdefault("hypothesis_summary", [])
+        sections.setdefault("experience_candidates", [])
+    elif mode == "mixed":
+        set_default_if_blank(payload, "original_goal", payload["title"])
+        set_default_if_blank(payload, "final_outcome", "Pending confirmation.")
+        if not isinstance(payload.get("involved"), list) or not payload["involved"]:
+            inferred = [tag for tag in payload.get("tags", []) if tag in {"dev", "read", "debug"}]
+            payload["involved"] = inferred or ["dev"]
+        set_default_if_blank(payload, "primary_type", first_valid_primary_type(payload.get("involved")) or "dev")
+        sections.setdefault("timeline", [])
+        sections.setdefault("key_decisions", [])
+        outputs = sections.get("outputs")
+        if not isinstance(outputs, dict):
+            outputs = {}
+            sections["outputs"] = outputs
+        set_default_if_blank(outputs, "code", "None")
+        set_default_if_blank(outputs, "knowledge", "Pending confirmation.")
+        set_default_if_blank(outputs, "remaining", "Pending confirmation.")
+        sections.setdefault("experience_candidates", [])
+    return payload
 
 
 def next_id(prefix: str, day: str, existing_ids: list[str]) -> str:
@@ -267,7 +366,7 @@ def build_worklog_frontmatter(payload: dict[str, Any], worklog_id: str, project:
         "status": payload["status"],
         "tags": payload.get("tags", []),
     }
-    optional = ["ended_at", "produced_experience_ids"]
+    optional = ["ended_at", "produced_experience_ids", "mode_confidence", "mode_evidence", "draft_confirmed"]
     for key in optional:
         if key in payload:
             frontmatter[key] = payload[key]
@@ -381,6 +480,7 @@ def validate_experience_inputs(experiences: Any) -> None:
 
 
 def validate_payload(payload: dict[str, Any]) -> None:
+    apply_payload_defaults(payload)
     require_fields(payload, ["mode", "project_path", "title", "started_at", "duration_minutes", "status"], "worklog payload")
     if payload["mode"] not in VALID_MODES:
         raise SystemExit(f"mode must be one of: {', '.join(sorted(VALID_MODES))}")

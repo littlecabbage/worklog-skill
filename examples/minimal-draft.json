@@ -1,0 +1,15 @@
+{
+  "title": "Draft worklog from current context",
+  "sections": {
+    "timeline": [
+      "Summarized the current session from available context."
+    ],
+    "outputs": {
+      "knowledge": "The default flow should produce a draft before asking the user to fill fields.",
+      "remaining": "Confirm whether to save, edit, or discard the draft."
+    },
+    "experience_candidates": [
+      "Worklog capture works better when it drafts from context first and asks only for corrections."
+    ]
+  }
+}

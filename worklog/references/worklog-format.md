@@ -26,6 +26,20 @@ Required:
 - `status`
 - `tags`
 
+Draft-first script inputs may omit most of these fields. `finish_worklog.py` fills safe defaults before validation:
+- `mode`: `mixed`
+- `project_path`: current working directory
+- `title`: `Worklog draft`
+- `started_at`: current local time
+- `duration_minutes`: `0`
+- `status`: `partial`
+- `tags`: a mode-derived default
+
+Optional draft metadata:
+- `mode_confidence` (`high` | `medium` | `low`)
+- `mode_evidence[]`
+- `draft_confirmed`
+
 ## Mode-specific fields
 
 ### `dev`
@@ -52,6 +66,8 @@ Required:
 - `final_outcome`
 - `involved[]`
 - `primary_type`
+
+When fields are unknown, prefer a coherent draft with defaults over blocking the user with a form. Ask a targeted follow-up only for low-confidence mode selection or before writing confirmed experiences.
 
 ## Body sections
 

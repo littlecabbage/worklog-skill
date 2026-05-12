@@ -25,11 +25,15 @@
 1. 把 `worklog/` 复制到 `~/.claude/skills/`。
 2. 正常启动 Claude Code。
 3. 直接对 Claude 说，例如：
+   - “记录这次会话。”
+   - “把刚才做的事保存成 worklog。”
    - “把这次会话记录成 mixed worklog。”
    - “保存这次 debug 会话。”
    - “查一下以前关于 cache invalidation 的经验。”
    - “把 passive_deletes 那条经验标记过期。”
-4. Claude 会自动选择合适的模式、收集会话信息，并更新本地 worklog 文件。
+4. Claude 会先从上下文推断模式、生成可保存的草稿，再用一次极简确认后写入本地 worklog。
+
+默认交互是 context-first / draft-first。`/worklog` 不应该一开始就要求你填写标题、状态、标签和 sections，而应该先展示推断的 mode、证据、标题、摘要要点和待确认的经验候选。只有当你明确想逐项精修时，才使用 `/worklog edit` 或 `/worklog guided`。
 
 需要自动化、CI、批量导入或手动重建索引时，再直接运行脚本。
 
@@ -97,6 +101,12 @@ python3 worklog/scripts/init_worklog.py
 python3 worklog/scripts/finish_worklog.py --input examples/mixed-session.json
 ```
 
+draft-first 的 JSON 可以省略 Claude 能安全补齐的字段：
+
+```bash
+python3 worklog/scripts/finish_worklog.py --input examples/minimal-draft.json
+```
+
 ### 3. 手动修改后重建索引
 
 ```bash
@@ -140,6 +150,7 @@ EOF
 - `examples/read-session.json`
 - `examples/debug-session.json`
 - `examples/mixed-session.json`
+- `examples/minimal-draft.json`
 
 ## 隐私
 
