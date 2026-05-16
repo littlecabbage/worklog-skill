@@ -22,14 +22,51 @@ jobs:
       - name: Validate skill structure
         run: python3 tools/quick_validate.py worklog
 
+      - name: Run unittest suite
+        run: python3 -m unittest discover worklog/tests
+
       - name: Smoke test scripts
         run: |
-          TEST_ROOT="/tmp/worklog-test"
-          python3 worklog/scripts/init_worklog.py --root "$TEST_ROOT"
-          python3 worklog/scripts/finish_worklog.py --root "$TEST_ROOT" --input examples/mixed-session.json
+          set -euo pipefail
+          TEST_ROOT="$RUNNER_TEMP/worklog-test"
+          rm -rf "$TEST_ROOT"
+
+          # init: skeleton only — skip hooks/gitignore so we don't touch the runner's shared state
+          python3 worklog/scripts/init_worklog.py --root "$TEST_ROOT" --skip-hooks --skip-gitignore
+
+          # finish: feed an inline payload (no examples/ dir anymore)
+          python3 worklog/scripts/finish_worklog.py --root "$TEST_ROOT" <<'EOF'
+          {
+            "mode": "mixed",
+            "language": "en",
+            "project_path": "/tmp/ci",
+            "title": "CI smoke",
+            "started_at": "2026-05-12T09:00:00+08:00",
+            "duration_minutes": 1,
+            "status": "completed",
+            "tags": ["ci"],
+            "original_goal": "smoke",
+            "final_outcome": "done",
+            "primary_type": "dev",
+            "sections": {
+              "timeline": ["init", "finish"],
+              "outputs": {"code": "n/a", "knowledge": "n/a", "remaining": "none"},
+              "experience_candidates": []
+            },
+            "experiences": [
+              {"title": "CI experience", "body": "cache invalidation note", "tags": ["ci"], "confidence": "low"}
+            ]
+          }
+          EOF
+
           python3 worklog/scripts/reindex_worklog.py --root "$TEST_ROOT"
-          python3 worklog/scripts/deprecate_experience.py --root "$TEST_ROOT" exp-2026-05-12-001 "obsolete test entry"
+
+          # locate the experience id deterministically rather than hardcoding a date-stamped slug
+          EXP_ID=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['experiences'][0]['id'])" "$TEST_ROOT/index.json")
+          python3 worklog/scripts/deprecate_experience.py --root "$TEST_ROOT" "$EXP_ID" "obsolete test entry"
+
           python3 worklog/scripts/search_worklog.py --root "$TEST_ROOT" cache --type experiences
+
           test -f "$TEST_ROOT/INDEX.md"
           test -f "$TEST_ROOT/EXPERIENCES.md"
           test -f "$TEST_ROOT/index.json"
