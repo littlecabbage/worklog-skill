@@ -35,6 +35,20 @@ Do not start `/worklog` by asking for title, status, tags, or mode. Generate the
 - `/worklog edit` or `/worklog guided`: detailed mode for users who explicitly want to revise fields section by section.
 - Low confidence: ask one targeted choice, such as "Is this mainly `read` or `debug-session`?", then continue with a draft.
 
+## Language detection
+
+Before finalizing, detect the dominant language of the current Claude Code conversation (user prompts plus your own replies) and set `language` on the payload:
+
+- Predominantly Chinese → `language: "zh"`
+- Predominantly English → `language: "en"`
+- Mixed signals or unclear → **default to `"zh"`** (this is also the script-level fallback)
+
+`language` controls only structural text in the output: section headers (`## Goal` / `## 目标`), table column names, inline output labels (`Code` / `代码`), and the INDEX.md / EXPERIENCES.md headings and preamble. Bullet content, decisions, and free-text fields stay in whichever language you wrote them. Frontmatter keys (`mode`, `title`, `status`, `tags`, etc.) always remain English.
+
+`INDEX.md` and `EXPERIENCES.md` are rebuilt from all worklogs on each save; their language follows the majority across worklog frontmatter, with `zh` winning ties.
+
+The payload field is forwarded by `apply_payload_defaults` and validated by `validate_payload`; if you omit it the renderer falls back to the default language. Supported values: `en`, `zh`.
+
 ## Mode selection
 - `dev`: the main outcome is code changes.
 - `read`: the main outcome is understanding code, APIs, or architecture.

@@ -26,6 +26,7 @@
 - `duration_minutes`
 - `status`
 - `tags`
+- `language`（`en` | `zh`）—— 由主 agent 根据对话语言判定；只影响渲染时的结构性文本（section 标题、表格列名等），不影响内容
 
 draft-first 的脚本输入可以省略大部分字段。`finish_worklog.py` 会在校验前补安全默认值：
 - `mode`：`mixed`
@@ -35,6 +36,7 @@ draft-first 的脚本输入可以省略大部分字段。`finish_worklog.py` 会
 - `duration_minutes`：`0`
 - `status`：`partial`
 - `tags`：按 mode 派生
+- `language`：`zh`（与脚本层 `DEFAULT_LANGUAGE` 一致）
 
 可选草稿元数据：
 - `mode_confidence`（`high` | `medium` | `low`）

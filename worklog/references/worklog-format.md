@@ -26,6 +26,7 @@ Required:
 - `duration_minutes`
 - `status`
 - `tags`
+- `language` (`en` | `zh`) — set by the main agent based on the conversation; controls structural text in the rendered markdown only
 
 Draft-first script inputs may omit most of these fields. `finish_worklog.py` fills safe defaults before validation:
 - `mode`: `mixed`
@@ -35,6 +36,7 @@ Draft-first script inputs may omit most of these fields. `finish_worklog.py` fil
 - `duration_minutes`: `0`
 - `status`: `partial`
 - `tags`: a mode-derived default
+- `language`: `zh` (matches the script-level `DEFAULT_LANGUAGE`)
 
 Optional draft metadata:
 - `mode_confidence` (`high` | `medium` | `low`)

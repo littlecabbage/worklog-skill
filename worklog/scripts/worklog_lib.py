@@ -20,6 +20,8 @@ PRIMARY_TYPES = {"dev", "read", "debug"}
 WORKLOG_STATUSES = {"completed", "partial", "paused", "blocked", "abandoned"}
 EXPERIENCE_STATUSES = {"active", "deprecated", "wrong", "evolving"}
 CONFIDENCE_LEVELS = {"high", "medium", "low"}
+SUPPORTED_LANGUAGES = {"en", "zh"}
+DEFAULT_LANGUAGE = "zh"
 DEFAULT_TAGS_BY_MODE = {
     "dev": ["dev"],
     "read": ["read"],
@@ -67,10 +69,10 @@ def ensure_root(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "archive").mkdir(exist_ok=True)
     if not (root / "INDEX.md").exists():
-        (root / "INDEX.md").write_text("# Work Log Index\n", encoding="utf-8")
+        (root / "INDEX.md").write_text(f"# {t(DEFAULT_LANGUAGE, 'index.title')}\n", encoding="utf-8")
     if not (root / "EXPERIENCES.md").exists():
         (root / "EXPERIENCES.md").write_text(
-            "# Experience Library\n\n> Newest first. Keep original wording when deprecating. Mark stale or wrong content with `~~...~~` and add a reason.\n",
+            f"# {t(DEFAULT_LANGUAGE, 'exp.title')}\n\n> {t(DEFAULT_LANGUAGE, 'exp.preamble')}\n",
             encoding="utf-8",
         )
     if not (root / "index.json").exists():
@@ -102,7 +104,7 @@ def date_only(value: str) -> str:
 
 
 def slugify(value: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip().lower())
+    cleaned = re.sub(r"[^\w._-]+", "-", value.strip().lower(), flags=re.UNICODE)
     cleaned = re.sub(r"-+", "-", cleaned).strip("-._")
     return cleaned or "untitled"
 
@@ -176,6 +178,7 @@ def apply_payload_defaults(payload: dict[str, Any]) -> dict[str, Any]:
     set_default_if_blank(payload, "started_at", iso_now())
     set_default_if_blank(payload, "duration_minutes", 0)
     set_default_if_blank(payload, "status", "partial")
+    set_default_if_blank(payload, "language", DEFAULT_LANGUAGE)
 
     mode = payload.get("mode")
     if not isinstance(payload.get("tags"), list):
@@ -334,57 +337,79 @@ def render_table(rows: list[dict[str, Any]], columns: list[tuple[str, str]]) -> 
 def render_worklog_body(payload: dict[str, Any]) -> str:
     mode = payload["mode"]
     sections = payload.get("sections", {})
+    lang = payload.get("language")
     if mode == "dev":
         return "\n\n".join(
             [
-                "## Goal\n\n" + (sections.get("goal") or ""),
-                "## Completed\n\n" + render_bullets(sections.get("completed")),
-                "## Key decisions\n\n"
-                + render_table(sections.get("key_decisions", []), [("Decision", "decision"), ("Why", "why"), ("Alternatives rejected", "alternatives")]),
-                "## Learned / experience candidates\n\n" + render_bullets(sections.get("learned")),
-                "## Remaining TODOs\n\n" + render_bullets(sections.get("remaining_todos")),
-                "## References\n\n" + render_bullets(sections.get("references")),
+                f"## {t(lang, 'h.goal')}\n\n" + (sections.get("goal") or ""),
+                f"## {t(lang, 'h.completed')}\n\n" + render_bullets(sections.get("completed")),
+                f"## {t(lang, 'h.key_decisions')}\n\n"
+                + render_table(
+                    sections.get("key_decisions", []),
+                    [
+                        (t(lang, "col.decision"), "decision"),
+                        (t(lang, "col.why"), "why"),
+                        (t(lang, "col.alternatives"), "alternatives"),
+                    ],
+                ),
+                f"## {t(lang, 'h.learned')}\n\n" + render_bullets(sections.get("learned")),
+                f"## {t(lang, 'h.remaining_todos')}\n\n" + render_bullets(sections.get("remaining_todos")),
+                f"## {t(lang, 'h.references')}\n\n" + render_bullets(sections.get("references")),
             ]
         )
     if mode == "read":
         return "\n\n".join(
             [
-                "## Reading goal\n\n" + (sections.get("reading_goal") or ""),
-                "## Entry points and path\n\n" + render_bullets(sections.get("entry_points")),
-                "## One-sentence mental model\n\n" + (sections.get("mental_model") or ""),
-                "## Key findings\n\n" + render_bullets(sections.get("key_findings")),
-                "## Open questions / where to resume\n\n" + render_bullets(sections.get("open_questions")),
-                "## Evidence\n\n" + render_bullets(sections.get("evidence")),
-                "## Follow-on output\n\n" + render_bullets(sections.get("follow_on_output")),
+                f"## {t(lang, 'h.reading_goal')}\n\n" + (sections.get("reading_goal") or ""),
+                f"## {t(lang, 'h.entry_points')}\n\n" + render_bullets(sections.get("entry_points")),
+                f"## {t(lang, 'h.mental_model')}\n\n" + (sections.get("mental_model") or ""),
+                f"## {t(lang, 'h.key_findings')}\n\n" + render_bullets(sections.get("key_findings")),
+                f"## {t(lang, 'h.open_questions')}\n\n" + render_bullets(sections.get("open_questions")),
+                f"## {t(lang, 'h.evidence')}\n\n" + render_bullets(sections.get("evidence")),
+                f"## {t(lang, 'h.follow_on_output')}\n\n" + render_bullets(sections.get("follow_on_output")),
             ]
         )
     if mode == "debug-session":
         return "\n\n".join(
             [
-                "## Prior sessions\n\n" + render_bullets(sections.get("prior_sessions")),
-                "## Progress in this session\n\n" + render_bullets(sections.get("progress")),
-                "## Current status\n\n" + (sections.get("current_status") or ""),
-                "## Resume here next time\n\n" + render_bullets(sections.get("resume_here")),
-                "## Hypothesis summary\n\n"
-                + render_table(sections.get("hypothesis_summary", []), [("Hypothesis", "hypothesis"), ("Status", "status"), ("Evidence", "evidence")]),
-                "## Experience candidates\n\n" + render_bullets(sections.get("experience_candidates")),
+                f"## {t(lang, 'h.prior_sessions')}\n\n" + render_bullets(sections.get("prior_sessions")),
+                f"## {t(lang, 'h.progress')}\n\n" + render_bullets(sections.get("progress")),
+                f"## {t(lang, 'h.current_status')}\n\n" + (sections.get("current_status") or ""),
+                f"## {t(lang, 'h.resume_here')}\n\n" + render_bullets(sections.get("resume_here")),
+                f"## {t(lang, 'h.hypothesis_summary')}\n\n"
+                + render_table(
+                    sections.get("hypothesis_summary", []),
+                    [
+                        (t(lang, "col.hypothesis"), "hypothesis"),
+                        (t(lang, "col.status"), "status"),
+                        (t(lang, "col.evidence"), "evidence"),
+                    ],
+                ),
+                f"## {t(lang, 'h.experience_candidates')}\n\n" + render_bullets(sections.get("experience_candidates")),
             ]
         )
     return "\n\n".join(
         [
-            "## Timeline\n\n" + render_bullets(sections.get("timeline")),
-            "## Key decisions\n\n"
-            + render_table(sections.get("key_decisions", []), [("Time", "time"), ("Decision", "decision"), ("Why", "why")]),
-            "## Outputs\n\n" + render_outputs(sections.get("outputs", {})),
-            "## Experience candidates\n\n" + render_bullets(sections.get("experience_candidates")),
+            f"## {t(lang, 'h.timeline')}\n\n" + render_bullets(sections.get("timeline")),
+            f"## {t(lang, 'h.key_decisions')}\n\n"
+            + render_table(
+                sections.get("key_decisions", []),
+                [
+                    (t(lang, "col.time"), "time"),
+                    (t(lang, "col.decision"), "decision"),
+                    (t(lang, "col.why"), "why"),
+                ],
+            ),
+            f"## {t(lang, 'h.outputs')}\n\n" + render_outputs(sections.get("outputs", {}), lang),
+            f"## {t(lang, 'h.experience_candidates')}\n\n" + render_bullets(sections.get("experience_candidates")),
         ]
     )
 
 
-def render_outputs(outputs: dict[str, Any]) -> str:
+def render_outputs(outputs: dict[str, Any], language: Any = None) -> str:
     parts = []
-    for label, key in [("Code", "code"), ("Knowledge", "knowledge"), ("Remaining", "remaining")]:
-        parts.append(f"- {label}: {outputs.get(key, '')}".rstrip())
+    for label_key, value_key in [("label.code", "code"), ("label.knowledge", "knowledge"), ("label.remaining", "remaining")]:
+        parts.append(f"- {t(language, label_key)}: {outputs.get(value_key, '')}".rstrip())
     return "\n".join(parts)
 
 
@@ -400,6 +425,7 @@ def build_worklog_frontmatter(payload: dict[str, Any], worklog_id: str, project:
         "duration_minutes": payload["duration_minutes"],
         "status": payload["status"],
         "tags": payload.get("tags", []),
+        "language": normalize_language(payload.get("language")),
     }
     optional = ["ended_at", "produced_experience_ids", "mode_confidence", "mode_evidence", "draft_confirmed"]
     for key in optional:
@@ -467,6 +493,7 @@ def build_worklog_entry(frontmatter: dict[str, Any], relative_path: str) -> dict
         "linked_debug_doc": frontmatter.get("linked_debug_doc"),
         "commits": [item for item in commit_hashes if item],
         "produced_experience_ids": frontmatter.get("produced_experience_ids", []),
+        "language": normalize_language(frontmatter.get("language")),
     }
 
 
@@ -521,6 +548,8 @@ def validate_payload(payload: dict[str, Any]) -> None:
         raise SystemExit(f"mode must be one of: {', '.join(sorted(VALID_MODES))}")
     if payload["status"] not in WORKLOG_STATUSES:
         raise SystemExit(f"status must be one of: {', '.join(sorted(WORKLOG_STATUSES))}")
+    if payload.get("language") not in SUPPORTED_LANGUAGES:
+        raise SystemExit(f"language must be one of: {', '.join(sorted(SUPPORTED_LANGUAGES))}")
     require_list(payload.get("tags", []), "tags")
     try:
         parse_date(payload["started_at"])
@@ -667,7 +696,7 @@ def meta_value(value: Any) -> str:
     return str(value)
 
 
-def render_experiences_md(entries: list[dict[str, Any]]) -> str:
+def render_experiences_md(entries: list[dict[str, Any]], language: Any = None) -> str:
     entries = sorted(entries, key=lambda item: (item["date"], item["id"]), reverse=True)
     tag_counter = Counter()
     for entry in entries:
@@ -675,16 +704,16 @@ def render_experiences_md(entries: list[dict[str, Any]]) -> str:
             for tag in entry["meta"].get("tags", []):
                 tag_counter[tag] += 1
     lines = [
-        "# Experience Library",
+        f"# {t(language, 'exp.title')}",
         "",
-        "> Newest first. Keep original wording when deprecating. Mark stale or wrong content with `~~...~~` and add a reason.",
+        f"> {t(language, 'exp.preamble')}",
         "",
-        "## Tag index",
+        f"## {t(language, 'exp.tag_index')}",
     ]
     if tag_counter:
         lines.append("- " + " · ".join(f"`#{tag}` ({count})" for tag, count in sorted(tag_counter.items())))
     else:
-        lines.append("- None")
+        lines.append(f"- {t(language, 'exp.none')}")
     lines.extend(["", "---", ""])
     current_date = None
     for entry in entries:
@@ -704,9 +733,9 @@ def find_anchor_line(text: str, anchor: str) -> int | None:
     return None
 
 
-def render_index_md(worklogs: list[dict[str, Any]]) -> str:
+def render_index_md(worklogs: list[dict[str, Any]], language: Any = None) -> str:
     ordered = sorted(worklogs, key=lambda item: (item["date"], item["id"]), reverse=True)
-    lines = ["# Work Log Index", ""]
+    lines = [f"# {t(language, 'index.title')}", ""]
     current_date = None
     for item in ordered:
         if item["date"] != current_date:
@@ -815,7 +844,8 @@ def rebuild_indexes(root: Path, entries: list[dict[str, Any]] | None = None) -> 
     worklogs = [parse_worklog_file(path, root) for path in worklog_files if path.name not in {"INDEX.md", "EXPERIENCES.md"}]
     source_map = {item["id"]: item for item in worklogs}
     experience_entries = entries if entries is not None else parse_experience_entries(root)
-    experiences_md = render_experiences_md(experience_entries)
+    project_language = majority_language(worklogs)
+    experiences_md = render_experiences_md(experience_entries, project_language)
     (root / "EXPERIENCES.md").write_text(experiences_md, encoding="utf-8")
     experiences = []
     for entry in experience_entries:
@@ -831,7 +861,7 @@ def rebuild_indexes(root: Path, entries: list[dict[str, Any]] | None = None) -> 
         "stats": compute_stats(worklogs, experiences),
     }
     write_index_json(root, index)
-    (root / "INDEX.md").write_text(render_index_md(worklogs), encoding="utf-8")
+    (root / "INDEX.md").write_text(render_index_md(worklogs, project_language), encoding="utf-8")
     return index
 
 
@@ -961,3 +991,107 @@ def archive_draft(cwd: str | Path | None, session_id: str) -> Path | None:
         target = archived_root / f"{session_id}-{int(datetime.now().timestamp())}"
     source.rename(target)
     return target
+
+
+I18N: dict[str, dict[str, str]] = {
+    "en": {
+        "h.goal": "Goal",
+        "h.completed": "Completed",
+        "h.key_decisions": "Key decisions",
+        "h.learned": "Learned / experience candidates",
+        "h.remaining_todos": "Remaining TODOs",
+        "h.references": "References",
+        "h.reading_goal": "Reading goal",
+        "h.entry_points": "Entry points and path",
+        "h.mental_model": "One-sentence mental model",
+        "h.key_findings": "Key findings",
+        "h.open_questions": "Open questions / where to resume",
+        "h.evidence": "Evidence",
+        "h.follow_on_output": "Follow-on output",
+        "h.prior_sessions": "Prior sessions",
+        "h.progress": "Progress in this session",
+        "h.current_status": "Current status",
+        "h.resume_here": "Resume here next time",
+        "h.hypothesis_summary": "Hypothesis summary",
+        "h.experience_candidates": "Experience candidates",
+        "h.timeline": "Timeline",
+        "h.outputs": "Outputs",
+        "col.decision": "Decision",
+        "col.why": "Why",
+        "col.alternatives": "Alternatives rejected",
+        "col.time": "Time",
+        "col.hypothesis": "Hypothesis",
+        "col.status": "Status",
+        "col.evidence": "Evidence",
+        "label.code": "Code",
+        "label.knowledge": "Knowledge",
+        "label.remaining": "Remaining",
+        "index.title": "Work Log Index",
+        "exp.title": "Experience Library",
+        "exp.preamble": "Newest first. Keep original wording when deprecating. Mark stale or wrong content with `~~...~~` and add a reason.",
+        "exp.tag_index": "Tag index",
+        "exp.none": "None",
+    },
+    "zh": {
+        "h.goal": "目标",
+        "h.completed": "完成情况",
+        "h.key_decisions": "关键决策",
+        "h.learned": "经验候选",
+        "h.remaining_todos": "遗留 TODO",
+        "h.references": "参考",
+        "h.reading_goal": "阅读目标",
+        "h.entry_points": "入口与路径",
+        "h.mental_model": "一句话心智模型",
+        "h.key_findings": "关键发现",
+        "h.open_questions": "未解问题 / 下次继续",
+        "h.evidence": "引用证据",
+        "h.follow_on_output": "衍生产出",
+        "h.prior_sessions": "历次会话",
+        "h.progress": "本次进展",
+        "h.current_status": "当前状态",
+        "h.resume_here": "下次从这里继续",
+        "h.hypothesis_summary": "假设池摘要",
+        "h.experience_candidates": "经验候选",
+        "h.timeline": "主线时间线",
+        "h.outputs": "产出",
+        "col.decision": "决策",
+        "col.why": "原因",
+        "col.alternatives": "已排除方案",
+        "col.time": "时间",
+        "col.hypothesis": "假设",
+        "col.status": "状态",
+        "col.evidence": "证据",
+        "label.code": "代码",
+        "label.knowledge": "知识",
+        "label.remaining": "遗留",
+        "index.title": "工作日志索引",
+        "exp.title": "经验库",
+        "exp.preamble": "最新优先。废弃时保留原文。过期或错误的内容用 `~~...~~` 标记并注明原因。",
+        "exp.tag_index": "标签索引",
+        "exp.none": "无",
+    },
+}
+
+
+def normalize_language(value: Any) -> str:
+    if isinstance(value, str) and value in SUPPORTED_LANGUAGES:
+        return value
+    return DEFAULT_LANGUAGE
+
+
+def t(language: Any, key: str) -> str:
+    lang = normalize_language(language)
+    table = I18N.get(lang) or I18N[DEFAULT_LANGUAGE]
+    if key in table:
+        return table[key]
+    return I18N[DEFAULT_LANGUAGE].get(key, key)
+
+
+def majority_language(worklogs: list[dict[str, Any]]) -> str:
+    counts: dict[str, int] = {}
+    for item in worklogs:
+        lang = normalize_language(item.get("language") if isinstance(item, dict) else None)
+        counts[lang] = counts.get(lang, 0) + 1
+    if not counts:
+        return DEFAULT_LANGUAGE
+    return max(SUPPORTED_LANGUAGES, key=lambda lg: (counts.get(lg, 0), lg == DEFAULT_LANGUAGE))
