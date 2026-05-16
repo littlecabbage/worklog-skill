@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
@@ -884,3 +885,79 @@ def normalize_experience(exp: dict[str, Any], worklog_id: str, project: str, wor
             "source_worklog_id": worklog_id,
         },
     }
+
+
+SENSITIVE_FILENAME_PATTERNS = [
+    ".env",
+    ".env.*",
+    "*secret*",
+    "*credential*",
+    "*password*",
+    "*token*",
+    "*.pem",
+    "*.key",
+    "id_rsa*",
+    ".netrc",
+]
+SENSITIVE_PATH_SEGMENTS = {".ssh", ".aws"}
+REDACTED = "<redacted>"
+ELLIPSIS = "…"
+
+
+def redact_path(value: Any) -> Any:
+    if not isinstance(value, str) or not value:
+        return value
+    try:
+        candidate = Path(value)
+    except (ValueError, OSError):
+        return value
+    name_lower = candidate.name.lower()
+    for pattern in SENSITIVE_FILENAME_PATTERNS:
+        if fnmatch.fnmatchcase(name_lower, pattern):
+            return REDACTED
+    for segment in candidate.parts:
+        if segment.lower() in SENSITIVE_PATH_SEGMENTS:
+            return REDACTED
+    return value
+
+
+def truncate_field(value: Any, limit: int) -> str:
+    if value is None:
+        return ""
+    text = value if isinstance(value, str) else str(value)
+    if limit <= 0 or len(text) <= limit:
+        return text
+    return text[:limit] + ELLIPSIS
+
+
+def current_session_dir(cwd: str | Path | None, session_id: str) -> Path:
+    return default_project_root(cwd) / "draft" / session_id
+
+
+def load_session_events(cwd: str | Path | None, session_id: str) -> list[dict[str, Any]]:
+    path = current_session_dir(cwd, session_id) / "events.jsonl"
+    if not path.exists():
+        return []
+    events: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            events.append(json.loads(stripped))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def archive_draft(cwd: str | Path | None, session_id: str) -> Path | None:
+    source = current_session_dir(cwd, session_id)
+    if not source.exists():
+        return None
+    archived_root = source.parent / ".archived"
+    archived_root.mkdir(parents=True, exist_ok=True)
+    target = archived_root / session_id
+    if target.exists():
+        target = archived_root / f"{session_id}-{int(datetime.now().timestamp())}"
+    source.rename(target)
+    return target
