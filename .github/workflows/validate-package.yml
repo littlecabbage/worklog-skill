@@ -34,7 +34,7 @@ jobs:
           # init: skeleton only — skip hooks/gitignore so we don't touch the runner's shared state
           python3 worklog/scripts/init_worklog.py --root "$TEST_ROOT" --skip-hooks --skip-gitignore
 
-          # finish: feed an inline payload (no examples/ dir anymore)
+          # finish: feed an inline body-first payload (no examples/ dir anymore)
           python3 worklog/scripts/finish_worklog.py --root "$TEST_ROOT" <<'EOF'
           {
             "mode": "mixed",
@@ -45,14 +45,9 @@ jobs:
             "duration_minutes": 1,
             "status": "completed",
             "tags": ["ci"],
-            "original_goal": "smoke",
-            "final_outcome": "done",
-            "primary_type": "dev",
-            "sections": {
-              "timeline": ["init", "finish"],
-              "outputs": {"code": "n/a", "knowledge": "n/a", "remaining": "none"},
-              "experience_candidates": []
-            },
+            "summary": "CI smoke run that exercises init, finish, reindex, deprecate, and search end-to-end.",
+            "body": "## Timeline\n\n- init\n- finish\n\n## Outputs\n\n- code: n/a\n- knowledge: n/a\n- remaining: none\n",
+            "meta": {"original_goal": "smoke", "final_outcome": "done", "primary_type": "dev"},
             "experiences": [
               {"title": "CI experience", "body": "cache invalidation note", "tags": ["ci"], "confidence": "low"}
             ]
