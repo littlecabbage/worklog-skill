@@ -7,55 +7,36 @@
 
 ![worklog.skill promotional banner](assets/worklog-skill-promo.png)
 
-## Contents
+A Claude Code skill that turns a working session into a project-local, searchable, reusable work log. It captures information you can't easily recover from code or chat history later: why you picked the current approach, which assumptions you ruled out, how a bug was traced, and where to resume next time.
 
-- [Core features](#core-features)
-- [Project structure & workflow](#project-structure--workflow)
-- [Installation & setup](#installation--setup)
-- [Daily usage](#daily-usage)
-- [Advanced](#advanced)
-- [Privacy](#privacy)
-- [Development](#development)
-- [License](#license)
-
-A shareable Claude Code skill for turning individual working sessions into searchable work logs and reusable engineering knowledge.
-
-`worklog.skill` helps you capture not just what changed, but also what you learned, what you ruled out, and what should be easy to find again later.
+It is **not** an issue tracker, daily report, or project documentation — it is the **local memory layer for engineering context**.
 
 ## Core features
 
-The skill supports four session modes: `dev`, `read`, `debug-session`, and `mixed`.
+- **Project-local**: writes to the current project's `.worklog/` by default; goals, decisions, debugging traces, and reusable findings live next to the code.
+- **Hook-driven capture + end-of-session summary**: Claude Code hooks collect prompts, tool calls, and file/dir signals during the session; Claude composes a formal worklog at the end.
+- **Readable by humans and agents**: `INDEX.md` / `EXPERIENCES.md` for browsing, `index.json` for `jq` and scripts.
 
-By default it writes project-local artifacts under the current repository's `.worklog/` directory:
+## Project structure
 
-- `INDEX.md` for human-readable session history
-- `EXPERIENCES.md` for reusable findings, lessons, and deprecations
-- `index.json` for machine lookup and `jq`-friendly queries
-- `draft/<session_id>/events.jsonl` for structured events captured by the optional hook layer
-
-Root selection is local-first:
-
-- default: nearest git repository's `.worklog/`
-- outside git: current directory's `.worklog/`
-- explicit global override: pass `--root ~/.claude/worklog`
-
-## Project structure & workflow
-
-Once initialized, `.worklog/` appears in your project:
+After init, `.worklog/` appears in the project:
 
 ```text
 .worklog/
-├── INDEX.md                  # human-readable session index
-├── EXPERIENCES.md            # reusable experiences, lessons, deprecations
-├── index.json                # machine-searchable index
-├── archive/                  # archived entries
-└── draft/<session_id>/        # optional hook-captured structured events
+├── INDEX.md              # human-readable session index
+├── EXPERIENCES.md        # reusable experiences, lessons, deprecations
+├── index.json            # machine-searchable index
+├── archive/              # archived entries
+└── draft/<session_id>/   # optional hook-captured event stream
     └── events.jsonl
 ```
 
-### Workflow
+Storage is local-first: inside a git repo it writes to the repo root's `.worklog/`; outside git it uses the current directory.
 
-#### 1. Init phase
+<details>
+<summary>Workflow diagrams (init / capture / finalize)</summary>
+
+### 1. Init
 
 ```mermaid
 flowchart LR
@@ -64,9 +45,7 @@ flowchart LR
     B --> D["optional hook setup<br/>Claude Code hooks<br/>.gitignore draft/"]
 ```
 
-Run `init_worklog.py` in your project to create the `.worklog/` skeleton and optionally install Claude Code hooks.
-
-#### 2. Capture phase
+### 2. Capture
 
 ```mermaid
 flowchart LR
@@ -77,9 +56,7 @@ flowchart LR
     D --> E["draft/&lt;session_id&gt;/events.jsonl<br/>low-noise facts for later summary"]
 ```
 
-During a session, hooks continuously write prompts, tool calls, file paths, command targets, and affected directories into `draft/<session_id>/events.jsonl`.
-
-#### 3. Finalize phase
+### 3. Finalize
 
 ```mermaid
 flowchart LR
@@ -91,118 +68,67 @@ flowchart LR
     E --> F["write formal worklog<br/>update INDEX.md<br/>update EXPERIENCES.md<br/>update index.json"]
 ```
 
-At session end (or when you explicitly ask), Claude reads the current context, hook events, file-history snapshots, and git state, summarizes scope, key changes, decisions, unfinished items, and experience candidates, then writes the worklog and updates the indexes after your confirmation.
+</details>
 
 ## Installation & setup
 
-### Get the code
+Requires Python ≥ 3.9.
 
 ```bash
 git clone https://github.com/littlecabbage/worklog-skill.git
+cp -R worklog ~/.claude/skills/        # or python3 tools/package_skill.py worklog ./dist
 ```
 
-Requires Python ≥ 3.9.
-
-### Install
-
-Option 1 — copy the skill directory:
-
-```bash
-cp -R worklog ~/.claude/skills/
-```
-
-Option 2 — build a distributable `.skill` package:
-
-```bash
-python3 tools/package_skill.py worklog ./dist
-```
-
-This creates `dist/worklog.skill`.
-
-### Initialize
-
-From inside a project, run:
+Initialize from inside a project:
 
 ```bash
 python3 worklog/scripts/init_worklog.py
 ```
 
-By default this does three things:
+This does three things by default: creates the `.worklog/` skeleton; installs three hooks in `.claude/settings.local.json` (shim at `~/.claude/hooks/worklog-capture.sh`); appends `/.worklog/draft/` to `.gitignore`.
 
-- creates `.worklog/INDEX.md`, `EXPERIENCES.md`, `index.json`, and `archive/`
-- installs capture hooks at `~/.claude/hooks/worklog-capture.sh` and registers them in `.claude/settings.local.json`
-- appends `/.worklog/draft/` to `.gitignore`
-
-Useful flags:
-
-- `--dry-run` — print the plan without writing
-- `--skip-hooks` — only create the skeleton
-- `--skip-gitignore` — leave `.gitignore` alone
-- `--global` — register hooks in `~/.claude/settings.json` instead of the project
-- `--uninstall` — reverse the install, preserving `.worklog/` data
+Useful flags: `--dry-run` (print only), `--skip-hooks`, `--skip-gitignore`, `--global` (register hooks in `~/.claude/settings.json`), `--uninstall` (reverse the install, preserves `.worklog/` data).
 
 ## Daily usage
 
-Ask Claude in natural language:
+Just ask in natural language:
 
 - "Record this session."
 - "Save a worklog for what we just did."
-- "Record this session as a mixed worklog."
 - "Save this debugging session."
 - "Search prior experiences about cache invalidation."
 - "Deprecate the passive_deletes experience."
 
-When triggered, Claude reads the captured events, file-history snapshots, and git state, drafts a save-ready summary, and asks one compact confirmation before writing.
-
-The default interaction is context-first and draft-first. `/worklog` should not start by asking you to fill title, status, tags, and sections. It should first show the inferred mode, evidence, title, summary bullets, and pending experience candidates.
-
-Use `/worklog edit` or `/worklog guided` only when you want detailed field-by-field control.
+When triggered, Claude reads chat context, hook events, file-history, and git state, drafts a save-ready summary, and asks one compact confirmation before writing. The default flow is context-first / draft-first — it won't make you fill in title, status, and tags up front.
 
 ## Advanced
 
 ### Active capture
 
-When `init_worklog.py` installs hooks, three Claude Code command hooks record structured events into `.worklog/draft/<session_id>/events.jsonl`:
+The three hooks installed by `init_worklog.py` write structured events to `.worklog/draft/<session_id>/events.jsonl`:
 
 - `UserPromptSubmit` — user prompt (truncated to 500 chars)
 - `PostToolUse` — tool name + target file or command (truncated to 256 chars, redacted)
 - `Stop` — last assistant reply excerpt (300 chars)
 
-Sensitive file paths are redacted at capture time (`.env*`, `*secret*`, `*credential*`, `*token*`, `*.pem`, `*.key`, `id_rsa*`, anything under `.ssh/` or `.aws/`, `.netrc`).
+The capture layer never calls an LLM, never blocks the main conversation, and exits silently on failure. Concurrent sessions in the same project are isolated by session-id.
 
-The hook layer never calls an LLM, never blocks the main conversation, and silently exits on any failure. Multiple concurrent sessions in the same project are isolated by session-id.
+Sensitive paths are redacted at capture time: `.env*`, `*secret*`, `*credential*`, `*token*`, `*.pem`, `*.key`, `id_rsa*`, anything under `.ssh/` or `.aws/`, `.netrc`.
 
-To temporarily disable capture, set `WORKLOG_HOOK_ACTIVE=1`.
-
-To remove the capture layer entirely:
-
-```bash
-python3 worklog/scripts/init_worklog.py --uninstall
-```
-
-This removes the hooks and the `.gitignore` entry but preserves all `.worklog/` data.
-
-To manage hooks separately from the skeleton:
-
-```bash
-python3 worklog/scripts/hooks_install.py
-python3 worklog/scripts/hooks_install.py --uninstall
-```
-
-Same `--project` / `--global` / `--dry-run` flags as `init_worklog.py`.
+To temporarily disable: `export WORKLOG_HOOK_ACTIVE=1`. To remove entirely: `python3 worklog/scripts/init_worklog.py --uninstall`.
 
 ### Script interface
 
-**Record a session:** `finish_worklog.py` accepts JSON via stdin or `--input`. The new schema is body-first: hand it a markdown string and it writes verbatim under generated frontmatter:
+Record a worklog (`finish_worklog.py` reads JSON from stdin or `--input`):
 
 ```bash
 python3 worklog/scripts/finish_worklog.py <<'EOF'
 {
   "mode": "dev",
   "title": "Implement soft delete for users",
+  "status": "completed",
   "started_at": "2026-05-12T09:30:00+08:00",
   "duration_minutes": 90,
-  "status": "completed",
   "tags": ["dev", "backend"],
   "summary": "Added soft-delete columns and updated service queries.",
   "body": "## Goal\n\nAdd soft delete support for users.\n\n## Done\n\n- Added deleted_at column\n- Updated service queries\n",
@@ -211,95 +137,39 @@ python3 worklog/scripts/finish_worklog.py <<'EOF'
 EOF
 ```
 
-Required: `mode` / `title` / `summary` / `body` / `status` / `started_at` / `duration_minutes`. `language` is auto-detected from the body's CJK ratio when omitted. Pass `--validate-only` to check a payload without writing.
+Required fields: `mode` / `title` / `summary` / `body` / `status` / `started_at` / `duration_minutes`. `language` is auto-detected from the body's CJK ratio when omitted. Pass `--validate-only` to check without writing.
 
-Example for `read` mode:
+Full schema: [worklog/references/worklog-format.md](worklog/references/worklog-format.md).
 
-```bash
-python3 worklog/scripts/finish_worklog.py <<'EOF'
-{
-  "mode": "read",
-  "title": "Understand scheduler wake-up path",
-  "started_at": "2026-05-12T09:00:00+08:00",
-  "duration_minutes": 55,
-  "status": "partial",
-  "tags": ["read", "scheduler"],
-  "summary": "Late wake-ups originate after retry backoff; need to confirm whether backoff mutates in place.",
-  "body": "## Reading goal\n\nUnderstand why delayed jobs wake late.\n\n## Entry points\n\n- scheduler.py:120\n- queue.py:44\n\n## Mental model\n\nWake-up time is calculated once, then adjusted only after dequeue.\n\n## Key findings\n\n- Clock skew is not the issue.\n- Late wake-ups start after retry backoff.\n",
-  "meta": {"read_type": "deep-dive", "target": "my-repo", "target_version": "main", "completion": 70}
-}
-EOF
-```
-
-The legacy `sections` payload has been removed; the script now exits with an error if it appears.
-
-Full field definitions at [worklog/references/worklog-format.md](worklog/references/worklog-format.md).
-
-**Rebuild indexes** after manual edits:
+Other commands:
 
 ```bash
-python3 worklog/scripts/reindex_worklog.py
-```
-
-**Search logs:**
-
-```bash
+python3 worklog/scripts/reindex_worklog.py                # rebuild indexes after manual edits
 python3 worklog/scripts/search_worklog.py "cache invalidation"
 ```
 
-### Output language
-
-The `language` field controls only structural text the script generates (INDEX.md / EXPERIENCES.md headings, preamble, tag-index labels). The body is whatever markdown you wrote. When `language` is omitted, the script auto-detects from the body's CJK character ratio (>30% → `zh`, otherwise `en`), falling back to `zh` if detection fails. Frontmatter keys are always English.
-
 ## Privacy
 
-This repository ships the skill source code only. It does not upload or sync your project `.worklog/` data.
+This repository ships skill source code only; it does not upload your `.worklog/` data. The capture hooks record file paths and tool names, not tool output content; sensitive paths are redacted at capture time.
 
-The capture hook layer records file *paths* and tool names, never tool output content. Sensitive file paths are redacted at capture time. User prompts are recorded literally (truncated, but not redacted) — if your prompts can contain secrets, disable capture before pasting them or run `init_worklog.py --uninstall`.
-
-If you want to share worklog history, do that intentionally through your own storage or version-control workflow.
+User prompts are recorded literally (truncated, not redacted). If a prompt may contain secrets, set `WORKLOG_HOOK_ACTIVE=1` before pasting, or `--uninstall` the capture layer. Share worklog history only intentionally through your own storage or version-control workflow.
 
 ## Development
 
-### Repository layout
-
 ```text
 worklog/
-├── worklog/                  # Claude skill source
-│   ├── SKILL.md
-│   ├── scripts/              # init / capture_hook / hooks_install / finish / reindex / search
-│   ├── references/           # worklog format reference
-│   └── tests/                # unittest suite (52 tests)
-├── tools/                    # Local validation and packaging helpers
+├── worklog/                  # Claude skill source (SKILL.md / scripts / references / tests)
+├── tools/                    # local validation and packaging helpers
 └── .github/workflows/        # CI validation and packaging
 ```
 
-### Local development
-
-Run the unittest suite:
+Run tests:
 
 ```bash
 python3 -m unittest discover worklog/tests
 ```
 
-Local smoke test:
-
-```bash
-python3 -m py_compile worklog/scripts/*.py tools/*.py
-python3 worklog/scripts/init_worklog.py --root /tmp/worklog-test --skip-hooks
-python3 worklog/scripts/reindex_worklog.py --root /tmp/worklog-test
-python3 tools/package_skill.py worklog ./dist
-```
-
-The GitHub Actions workflow validates the skill structure, compiles the scripts, runs an end-to-end smoke test, and packages the skill.
-
-### Contributing
-
-Issues and PRs welcome. Before submitting, please run:
-
-```bash
-python3 -m unittest discover worklog/tests
-```
+CI validates skill structure, compiles scripts, runs an end-to-end smoke test, and packages the skill. Issues and PRs welcome — please run the test suite before submitting.
 
 ## License
 
