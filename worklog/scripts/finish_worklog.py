@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from worklog_lib import (
     build_worklog_entry,
@@ -11,6 +12,7 @@ from worklog_lib import (
     date_only,
     ensure_relative,
     ensure_root,
+    is_body_payload,
     load_input,
     load_index_json,
     next_id,
@@ -19,20 +21,40 @@ from worklog_lib import (
     project_slug,
     rebuild_indexes,
     render_frontmatter,
-    render_worklog_body,
     root_path,
-    validate_payload,
+    validate_body_payload,
 )
+
+
+def emit_warnings(warnings: list[str]) -> None:
+    for line in warnings:
+        sys.stderr.write(f"warning: {line}\n")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Append a worklog and update indexes")
     parser.add_argument("--root", help=f"worklog root directory; defaults to the current project .worklog; use {GLOBAL_ROOT} for a global store")
     parser.add_argument("--input", help="path to input JSON; otherwise read stdin")
+    parser.add_argument("--validate-only", action="store_true", help="validate payload and exit without writing")
     args = parser.parse_args()
 
     payload = load_input(args.input)
-    validate_payload(payload)
+
+    if not is_body_payload(payload):
+        if "sections" in payload:
+            raise SystemExit(
+                "the legacy `sections` payload is no longer supported; pass a `body` markdown string instead. "
+                "See references/worklog-format.zh.md."
+            )
+        raise SystemExit("payload must include a `body` field (markdown string).")
+
+    warnings = validate_body_payload(payload)
+    emit_warnings(warnings)
+    body = payload["body"].rstrip() + "\n"
+
+    if args.validate_only:
+        print("ok")
+        return
 
     root = root_path(args.root, payload["project_path"])
     ensure_root(root)
@@ -48,7 +70,6 @@ def main() -> None:
     worklog_id = next_id("wl", day, [item["id"] for item in index.get("worklogs", [])])
     payload.setdefault("produced_experience_ids", [])
     frontmatter = build_worklog_frontmatter(payload, worklog_id, project)
-    body = render_worklog_body(payload)
 
     directory = root / project / day if args.root else root / day
     directory.mkdir(parents=True, exist_ok=True)

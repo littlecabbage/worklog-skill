@@ -148,14 +148,6 @@ def set_default_if_blank(data: dict[str, Any], key: str, value: Any) -> None:
         data[key] = value
 
 
-def ensure_sections(payload: dict[str, Any]) -> dict[str, Any]:
-    sections = payload.get("sections")
-    if not isinstance(sections, dict):
-        sections = {}
-        payload["sections"] = sections
-    return sections
-
-
 def default_debug_id(payload: dict[str, Any]) -> str:
     day = date_only(payload["started_at"])
     return f"dbg-{day}-{slugify(payload['title'])}"
@@ -169,72 +161,6 @@ def first_valid_primary_type(values: Any) -> str | None:
         if candidate in normalized:
             return candidate
     return None
-
-
-def apply_payload_defaults(payload: dict[str, Any]) -> dict[str, Any]:
-    set_default_if_blank(payload, "mode", "mixed")
-    set_default_if_blank(payload, "project_path", os.getcwd())
-    set_default_if_blank(payload, "title", "Worklog draft")
-    set_default_if_blank(payload, "started_at", iso_now())
-    set_default_if_blank(payload, "duration_minutes", 0)
-    set_default_if_blank(payload, "status", "partial")
-    set_default_if_blank(payload, "language", DEFAULT_LANGUAGE)
-
-    mode = payload.get("mode")
-    if not isinstance(payload.get("tags"), list):
-        payload["tags"] = []
-    if not payload["tags"] and mode in DEFAULT_TAGS_BY_MODE:
-        payload["tags"] = list(DEFAULT_TAGS_BY_MODE[mode])
-
-    sections = ensure_sections(payload)
-    if mode == "dev":
-        set_default_if_blank(sections, "goal", payload["title"])
-        sections.setdefault("completed", [])
-        sections.setdefault("key_decisions", [])
-        sections.setdefault("learned", sections.get("experience_candidates", []))
-        sections.setdefault("remaining_todos", [])
-        sections.setdefault("references", [])
-        payload.setdefault("commits", [])
-        payload.setdefault("files_changed", [])
-        payload.setdefault("loc", {"added": 0, "deleted": 0})
-    elif mode == "read":
-        set_default_if_blank(payload, "read_type", "survey")
-        set_default_if_blank(payload, "target", project_slug(payload["project_path"], payload.get("project")))
-        set_default_if_blank(payload, "target_version", "unknown")
-        set_default_if_blank(payload, "completion", 0)
-        set_default_if_blank(sections, "reading_goal", payload["title"])
-        sections.setdefault("entry_points", [])
-        set_default_if_blank(sections, "mental_model", "Pending confirmation.")
-        sections.setdefault("key_findings", [])
-        sections.setdefault("open_questions", [])
-        sections.setdefault("evidence", [])
-        sections.setdefault("follow_on_output", [])
-    elif mode == "debug-session":
-        set_default_if_blank(payload, "debug_id", default_debug_id(payload))
-        sections.setdefault("prior_sessions", [])
-        sections.setdefault("progress", [])
-        set_default_if_blank(sections, "current_status", "Pending confirmation.")
-        sections.setdefault("resume_here", [])
-        sections.setdefault("hypothesis_summary", [])
-        sections.setdefault("experience_candidates", [])
-    elif mode == "mixed":
-        set_default_if_blank(payload, "original_goal", payload["title"])
-        set_default_if_blank(payload, "final_outcome", "Pending confirmation.")
-        if not isinstance(payload.get("involved"), list) or not payload["involved"]:
-            inferred = [tag for tag in payload.get("tags", []) if tag in {"dev", "read", "debug"}]
-            payload["involved"] = inferred or ["dev"]
-        set_default_if_blank(payload, "primary_type", first_valid_primary_type(payload.get("involved")) or "dev")
-        sections.setdefault("timeline", [])
-        sections.setdefault("key_decisions", [])
-        outputs = sections.get("outputs")
-        if not isinstance(outputs, dict):
-            outputs = {}
-            sections["outputs"] = outputs
-        set_default_if_blank(outputs, "code", "None")
-        set_default_if_blank(outputs, "knowledge", "Pending confirmation.")
-        set_default_if_blank(outputs, "remaining", "Pending confirmation.")
-        sections.setdefault("experience_candidates", [])
-    return payload
 
 
 def next_id(prefix: str, day: str, existing_ids: list[str]) -> str:
@@ -323,96 +249,6 @@ def render_bullets(value: Any) -> str:
     return "- None"
 
 
-def render_table(rows: list[dict[str, Any]], columns: list[tuple[str, str]]) -> str:
-    header = "| " + " | ".join(label for label, _ in columns) + " |"
-    sep = "| " + " | ".join("---" for _ in columns) + " |"
-    body = []
-    for row in rows or []:
-        body.append("| " + " | ".join(str(row.get(key, "")) for _, key in columns) + " |")
-    if not body:
-        body.append("| " + " | ".join("" for _ in columns) + " |")
-    return "\n".join([header, sep, *body])
-
-
-def render_worklog_body(payload: dict[str, Any]) -> str:
-    mode = payload["mode"]
-    sections = payload.get("sections", {})
-    lang = payload.get("language")
-    if mode == "dev":
-        return "\n\n".join(
-            [
-                f"## {t(lang, 'h.goal')}\n\n" + (sections.get("goal") or ""),
-                f"## {t(lang, 'h.completed')}\n\n" + render_bullets(sections.get("completed")),
-                f"## {t(lang, 'h.key_decisions')}\n\n"
-                + render_table(
-                    sections.get("key_decisions", []),
-                    [
-                        (t(lang, "col.decision"), "decision"),
-                        (t(lang, "col.why"), "why"),
-                        (t(lang, "col.alternatives"), "alternatives"),
-                    ],
-                ),
-                f"## {t(lang, 'h.learned')}\n\n" + render_bullets(sections.get("learned")),
-                f"## {t(lang, 'h.remaining_todos')}\n\n" + render_bullets(sections.get("remaining_todos")),
-                f"## {t(lang, 'h.references')}\n\n" + render_bullets(sections.get("references")),
-            ]
-        )
-    if mode == "read":
-        return "\n\n".join(
-            [
-                f"## {t(lang, 'h.reading_goal')}\n\n" + (sections.get("reading_goal") or ""),
-                f"## {t(lang, 'h.entry_points')}\n\n" + render_bullets(sections.get("entry_points")),
-                f"## {t(lang, 'h.mental_model')}\n\n" + (sections.get("mental_model") or ""),
-                f"## {t(lang, 'h.key_findings')}\n\n" + render_bullets(sections.get("key_findings")),
-                f"## {t(lang, 'h.open_questions')}\n\n" + render_bullets(sections.get("open_questions")),
-                f"## {t(lang, 'h.evidence')}\n\n" + render_bullets(sections.get("evidence")),
-                f"## {t(lang, 'h.follow_on_output')}\n\n" + render_bullets(sections.get("follow_on_output")),
-            ]
-        )
-    if mode == "debug-session":
-        return "\n\n".join(
-            [
-                f"## {t(lang, 'h.prior_sessions')}\n\n" + render_bullets(sections.get("prior_sessions")),
-                f"## {t(lang, 'h.progress')}\n\n" + render_bullets(sections.get("progress")),
-                f"## {t(lang, 'h.current_status')}\n\n" + (sections.get("current_status") or ""),
-                f"## {t(lang, 'h.resume_here')}\n\n" + render_bullets(sections.get("resume_here")),
-                f"## {t(lang, 'h.hypothesis_summary')}\n\n"
-                + render_table(
-                    sections.get("hypothesis_summary", []),
-                    [
-                        (t(lang, "col.hypothesis"), "hypothesis"),
-                        (t(lang, "col.status"), "status"),
-                        (t(lang, "col.evidence"), "evidence"),
-                    ],
-                ),
-                f"## {t(lang, 'h.experience_candidates')}\n\n" + render_bullets(sections.get("experience_candidates")),
-            ]
-        )
-    return "\n\n".join(
-        [
-            f"## {t(lang, 'h.timeline')}\n\n" + render_bullets(sections.get("timeline")),
-            f"## {t(lang, 'h.key_decisions')}\n\n"
-            + render_table(
-                sections.get("key_decisions", []),
-                [
-                    (t(lang, "col.time"), "time"),
-                    (t(lang, "col.decision"), "decision"),
-                    (t(lang, "col.why"), "why"),
-                ],
-            ),
-            f"## {t(lang, 'h.outputs')}\n\n" + render_outputs(sections.get("outputs", {}), lang),
-            f"## {t(lang, 'h.experience_candidates')}\n\n" + render_bullets(sections.get("experience_candidates")),
-        ]
-    )
-
-
-def render_outputs(outputs: dict[str, Any], language: Any = None) -> str:
-    parts = []
-    for label_key, value_key in [("label.code", "code"), ("label.knowledge", "knowledge"), ("label.remaining", "remaining")]:
-        parts.append(f"- {t(language, label_key)}: {outputs.get(value_key, '')}".rstrip())
-    return "\n".join(parts)
-
-
 def build_worklog_frontmatter(payload: dict[str, Any], worklog_id: str, project: str) -> dict[str, Any]:
     mode = payload["mode"]
     frontmatter: dict[str, Any] = {
@@ -427,9 +263,14 @@ def build_worklog_frontmatter(payload: dict[str, Any], worklog_id: str, project:
         "tags": payload.get("tags", []),
         "language": normalize_language(payload.get("language")),
     }
-    optional = ["ended_at", "produced_experience_ids", "mode_confidence", "mode_evidence", "draft_confirmed"]
+    optional = [
+        "ended_at",
+        "produced_experience_ids",
+        "summary",
+        "search_keywords",
+    ]
     for key in optional:
-        if key in payload:
+        if key in payload and payload[key] not in (None, ""):
             frontmatter[key] = payload[key]
     if mode == "dev":
         frontmatter.update(
@@ -484,6 +325,8 @@ def build_worklog_entry(frontmatter: dict[str, Any], relative_path: str) -> dict
         "project": frontmatter["project"],
         "mode": frontmatter["mode"],
         "title": frontmatter["title"],
+        "summary": frontmatter.get("summary"),
+        "search_keywords": frontmatter.get("search_keywords", []),
         "tags": frontmatter.get("tags", []),
         "duration_minutes": frontmatter["duration_minutes"],
         "status": frontmatter["status"],
@@ -492,6 +335,14 @@ def build_worklog_entry(frontmatter: dict[str, Any], relative_path: str) -> dict
         "session_number": frontmatter.get("session_number"),
         "linked_debug_doc": frontmatter.get("linked_debug_doc"),
         "commits": [item for item in commit_hashes if item],
+        "branch": frontmatter.get("branch"),
+        "pr_url": frontmatter.get("pr_url"),
+        "read_type": frontmatter.get("read_type"),
+        "target": frontmatter.get("target"),
+        "target_version": frontmatter.get("target_version"),
+        "completion": frontmatter.get("completion"),
+        "primary_type": frontmatter.get("primary_type"),
+        "involved": frontmatter.get("involved", []),
         "produced_experience_ids": frontmatter.get("produced_experience_ids", []),
         "language": normalize_language(frontmatter.get("language")),
     }
@@ -523,6 +374,208 @@ def require_dict(value: Any, name: str) -> dict[str, Any]:
     return value
 
 
+KNOWN_TOP_LEVEL_KEYS = {
+    "mode",
+    "project",
+    "project_path",
+    "title",
+    "started_at",
+    "ended_at",
+    "duration_minutes",
+    "status",
+    "tags",
+    "language",
+    "summary",
+    "search_keywords",
+    "body",
+    "experiences",
+    "produced_experience_ids",
+    "meta",
+    "branch",
+    "commits",
+    "files_changed",
+    "loc",
+    "pr_url",
+    "read_type",
+    "target",
+    "target_version",
+    "completion",
+    "debug_id",
+    "session_number",
+    "linked_debug_doc",
+    "original_goal",
+    "final_outcome",
+    "involved",
+    "primary_type",
+}
+
+KNOWN_META_KEYS_BY_MODE = {
+    "dev": {"branch", "commits", "files_changed", "loc", "pr_url"},
+    "read": {"read_type", "target", "target_version", "completion"},
+    "debug-session": {"debug_id", "session_number", "linked_debug_doc"},
+    "mixed": {"original_goal", "final_outcome", "involved", "primary_type"},
+}
+
+
+def is_body_payload(payload: dict[str, Any]) -> bool:
+    return "body" in payload
+
+
+def detect_language_from_body(body: str) -> str:
+    if not isinstance(body, str) or not body:
+        return DEFAULT_LANGUAGE
+    cjk = 0
+    letters = 0
+    for char in body:
+        code = ord(char)
+        if 0x4E00 <= code <= 0x9FFF or 0x3400 <= code <= 0x4DBF or 0x3040 <= code <= 0x30FF:
+            cjk += 1
+            letters += 1
+        elif char.isalpha():
+            letters += 1
+    if letters == 0:
+        return DEFAULT_LANGUAGE
+    return "zh" if cjk / letters > 0.30 else "en"
+
+
+def flatten_meta(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Pull payload['meta'] (nested or flat by mode) up to top-level. Returns (payload, warnings)."""
+    warnings: list[str] = []
+    meta = payload.pop("meta", None)
+    if meta is None:
+        return payload, warnings
+    if not isinstance(meta, dict):
+        raise SystemExit("meta must be an object")
+    mode = payload.get("mode")
+    allowed = KNOWN_META_KEYS_BY_MODE.get(mode, set())
+    for key, value in meta.items():
+        if key in KNOWN_META_KEYS_BY_MODE and isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                if sub_key in KNOWN_META_KEYS_BY_MODE.get(key, set()):
+                    payload.setdefault(sub_key, sub_value)
+                else:
+                    warnings.append(f"meta.{key}.{sub_key} is not a known field for mode={key}; ignored")
+        elif key in allowed:
+            payload.setdefault(key, value)
+        else:
+            warnings.append(f"meta.{key} is not a known field for mode={mode}; ignored")
+    return payload, warnings
+
+
+def warn_unknown_top_level_keys(payload: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    for key in list(payload.keys()):
+        if key not in KNOWN_TOP_LEVEL_KEYS:
+            warnings.append(f"top-level key {key!r} is not recognized; kept in payload but not persisted")
+    return warnings
+
+
+def apply_body_payload_defaults(payload: dict[str, Any]) -> list[str]:
+    """Defaults for the new body-first payload. Returns informational warnings."""
+    warnings: list[str] = []
+    set_default_if_blank(payload, "mode", "mixed")
+    set_default_if_blank(payload, "project_path", os.getcwd())
+    set_default_if_blank(payload, "title", "Worklog draft")
+    set_default_if_blank(payload, "started_at", iso_now())
+    set_default_if_blank(payload, "duration_minutes", 0)
+    set_default_if_blank(payload, "status", "partial")
+
+    if not isinstance(payload.get("tags"), list):
+        payload["tags"] = []
+    mode = payload.get("mode")
+    if not payload["tags"] and mode in DEFAULT_TAGS_BY_MODE:
+        payload["tags"] = list(DEFAULT_TAGS_BY_MODE[mode])
+
+    if "language" not in payload or is_blank(payload.get("language")) or payload.get("language") not in SUPPORTED_LANGUAGES:
+        payload["language"] = detect_language_from_body(payload.get("body", ""))
+
+    if "search_keywords" in payload and not isinstance(payload["search_keywords"], list):
+        raise SystemExit("search_keywords must be an array of strings")
+
+    payload, meta_warnings = flatten_meta(payload)
+    warnings.extend(meta_warnings)
+
+    if mode == "debug-session":
+        set_default_if_blank(payload, "debug_id", default_debug_id(payload))
+
+    if mode == "mixed":
+        set_default_if_blank(payload, "original_goal", payload["title"])
+        set_default_if_blank(payload, "final_outcome", "Pending confirmation.")
+        if not isinstance(payload.get("involved"), list) or not payload["involved"]:
+            inferred = [tag for tag in payload.get("tags", []) if tag in {"dev", "read", "debug"}]
+            payload["involved"] = inferred or ["dev"]
+        set_default_if_blank(payload, "primary_type", first_valid_primary_type(payload.get("involved")) or "dev")
+
+    return warnings
+
+
+def validate_body_payload(payload: dict[str, Any]) -> list[str]:
+    """Validate the new body-first payload. Returns informational warnings."""
+    warnings = apply_body_payload_defaults(payload)
+    require_fields(
+        payload,
+        ["mode", "project_path", "title", "started_at", "duration_minutes", "status", "body", "summary"],
+        "worklog payload",
+    )
+    if payload["mode"] not in VALID_MODES:
+        raise SystemExit(f"mode must be one of: {', '.join(sorted(VALID_MODES))}")
+    if payload["status"] not in WORKLOG_STATUSES:
+        raise SystemExit(f"status must be one of: {', '.join(sorted(WORKLOG_STATUSES))}")
+    if payload["language"] not in SUPPORTED_LANGUAGES:
+        raise SystemExit(f"language must be one of: {', '.join(sorted(SUPPORTED_LANGUAGES))}")
+    require_list(payload.get("tags", []), "tags")
+    if "search_keywords" in payload:
+        require_list(payload["search_keywords"], "search_keywords")
+        for index, item in enumerate(payload["search_keywords"], start=1):
+            if not isinstance(item, str):
+                raise SystemExit(f"search_keywords[{index}] must be a string")
+
+    body = payload["body"]
+    if not isinstance(body, str) or not body.strip():
+        raise SystemExit("body must be a non-empty markdown string")
+    if body.lstrip().startswith("---\n") or body.lstrip().startswith("---\r"):
+        raise SystemExit("body must not begin with a YAML frontmatter fence ('---'); the script writes frontmatter itself")
+
+    summary = payload["summary"]
+    if not isinstance(summary, str) or not summary.strip():
+        raise SystemExit("summary must be a non-empty string (1-2 sentences)")
+
+    try:
+        parse_date(payload["started_at"])
+    except ValueError as exc:
+        raise SystemExit(f"started_at must be ISO 8601: {exc}") from exc
+    if not isinstance(payload["duration_minutes"], int) or payload["duration_minutes"] < 0:
+        raise SystemExit("duration_minutes must be a non-negative integer")
+
+    if payload.get("experiences") is not None:
+        validate_experience_inputs(payload["experiences"])
+
+    mode = payload["mode"]
+    if mode == "read":
+        if "completion" in payload and payload["completion"] is not None:
+            if not isinstance(payload["completion"], int) or not 0 <= payload["completion"] <= 100:
+                raise SystemExit("mode=read completion must be an integer from 0 to 100")
+        if "read_type" in payload and payload["read_type"] is not None and payload["read_type"] not in READ_TYPES:
+            raise SystemExit(f"mode=read read_type must be one of: {', '.join(sorted(READ_TYPES))}")
+    elif mode == "debug-session":
+        if payload.get("session_number") is not None and (
+            not isinstance(payload["session_number"], int) or payload["session_number"] <= 0
+        ):
+            raise SystemExit("mode=debug-session session_number must be a positive integer")
+    elif mode == "mixed":
+        if payload.get("primary_type") not in PRIMARY_TYPES:
+            raise SystemExit(f"mode=mixed primary_type must be one of: {', '.join(sorted(PRIMARY_TYPES))}")
+        require_list(payload.get("involved", []), "mode=mixed involved")
+    elif mode == "dev":
+        if "commits" in payload and not isinstance(payload["commits"], list):
+            raise SystemExit("mode=dev commits must be an array")
+        if "files_changed" in payload and not isinstance(payload["files_changed"], list):
+            raise SystemExit("mode=dev files_changed must be an array")
+
+    warnings.extend(warn_unknown_top_level_keys(payload))
+    return warnings
+
+
 def validate_experience_inputs(experiences: Any) -> None:
     require_list(experiences, "experiences")
     for index, experience in enumerate(experiences, start=1):
@@ -539,56 +592,6 @@ def validate_experience_inputs(experiences: Any) -> None:
             raise SystemExit(f"experiences[{index}].status must be one of: {', '.join(sorted(EXPERIENCE_STATUSES))}")
         if confidence not in CONFIDENCE_LEVELS:
             raise SystemExit(f"experiences[{index}].confidence must be one of: {', '.join(sorted(CONFIDENCE_LEVELS))}")
-
-
-def validate_payload(payload: dict[str, Any]) -> None:
-    apply_payload_defaults(payload)
-    require_fields(payload, ["mode", "project_path", "title", "started_at", "duration_minutes", "status"], "worklog payload")
-    if payload["mode"] not in VALID_MODES:
-        raise SystemExit(f"mode must be one of: {', '.join(sorted(VALID_MODES))}")
-    if payload["status"] not in WORKLOG_STATUSES:
-        raise SystemExit(f"status must be one of: {', '.join(sorted(WORKLOG_STATUSES))}")
-    if payload.get("language") not in SUPPORTED_LANGUAGES:
-        raise SystemExit(f"language must be one of: {', '.join(sorted(SUPPORTED_LANGUAGES))}")
-    require_list(payload.get("tags", []), "tags")
-    try:
-        parse_date(payload["started_at"])
-    except ValueError as exc:
-        raise SystemExit(f"started_at must be ISO 8601: {exc}") from exc
-    if not isinstance(payload["duration_minutes"], int) or payload["duration_minutes"] < 0:
-        raise SystemExit("duration_minutes must be a non-negative integer")
-
-    sections = require_dict(payload.get("sections", {}), "sections")
-    if payload.get("experiences") is not None:
-        validate_experience_inputs(payload["experiences"])
-
-    mode = payload["mode"]
-    if mode == "dev":
-        require_fields(sections, ["goal"], "mode=dev sections")
-        if "commits" in payload and not isinstance(payload["commits"], list):
-            raise SystemExit("mode=dev commits must be an array")
-        if "files_changed" in payload and not isinstance(payload["files_changed"], list):
-            raise SystemExit("mode=dev files_changed must be an array")
-    elif mode == "read":
-        require_fields(payload, ["read_type", "target", "target_version", "completion"], "mode=read")
-        if payload["read_type"] not in READ_TYPES:
-            raise SystemExit(f"mode=read read_type must be one of: {', '.join(sorted(READ_TYPES))}")
-        if not isinstance(payload["completion"], int) or not 0 <= payload["completion"] <= 100:
-            raise SystemExit("mode=read completion must be an integer from 0 to 100")
-        require_fields(sections, ["reading_goal", "mental_model"], "mode=read sections")
-    elif mode == "debug-session":
-        require_fields(payload, ["debug_id"], "mode=debug-session")
-        if payload.get("session_number") is not None and (not isinstance(payload["session_number"], int) or payload["session_number"] <= 0):
-            raise SystemExit("mode=debug-session session_number must be a positive integer")
-        require_fields(sections, ["current_status"], "mode=debug-session sections")
-    elif mode == "mixed":
-        require_fields(payload, ["original_goal", "final_outcome", "primary_type"], "mode=mixed")
-        require_list(payload.get("involved", []), "mode=mixed involved")
-        if payload["primary_type"] not in PRIMARY_TYPES:
-            raise SystemExit(f"mode=mixed primary_type must be one of: {', '.join(sorted(PRIMARY_TYPES))}")
-        require_fields(sections, ["timeline"], "mode=mixed sections")
-        outputs = require_dict(sections.get("outputs", {}), "mode=mixed sections.outputs")
-        require_fields(outputs, ["code", "knowledge", "remaining"], "mode=mixed sections.outputs")
 
 
 def ensure_relative(path: Path, root: Path) -> str:
@@ -995,37 +998,6 @@ def archive_draft(cwd: str | Path | None, session_id: str) -> Path | None:
 
 I18N: dict[str, dict[str, str]] = {
     "en": {
-        "h.goal": "Goal",
-        "h.completed": "Completed",
-        "h.key_decisions": "Key decisions",
-        "h.learned": "Learned / experience candidates",
-        "h.remaining_todos": "Remaining TODOs",
-        "h.references": "References",
-        "h.reading_goal": "Reading goal",
-        "h.entry_points": "Entry points and path",
-        "h.mental_model": "One-sentence mental model",
-        "h.key_findings": "Key findings",
-        "h.open_questions": "Open questions / where to resume",
-        "h.evidence": "Evidence",
-        "h.follow_on_output": "Follow-on output",
-        "h.prior_sessions": "Prior sessions",
-        "h.progress": "Progress in this session",
-        "h.current_status": "Current status",
-        "h.resume_here": "Resume here next time",
-        "h.hypothesis_summary": "Hypothesis summary",
-        "h.experience_candidates": "Experience candidates",
-        "h.timeline": "Timeline",
-        "h.outputs": "Outputs",
-        "col.decision": "Decision",
-        "col.why": "Why",
-        "col.alternatives": "Alternatives rejected",
-        "col.time": "Time",
-        "col.hypothesis": "Hypothesis",
-        "col.status": "Status",
-        "col.evidence": "Evidence",
-        "label.code": "Code",
-        "label.knowledge": "Knowledge",
-        "label.remaining": "Remaining",
         "index.title": "Work Log Index",
         "exp.title": "Experience Library",
         "exp.preamble": "Newest first. Keep original wording when deprecating. Mark stale or wrong content with `~~...~~` and add a reason.",
@@ -1033,37 +1005,6 @@ I18N: dict[str, dict[str, str]] = {
         "exp.none": "None",
     },
     "zh": {
-        "h.goal": "目标",
-        "h.completed": "完成情况",
-        "h.key_decisions": "关键决策",
-        "h.learned": "经验候选",
-        "h.remaining_todos": "遗留 TODO",
-        "h.references": "参考",
-        "h.reading_goal": "阅读目标",
-        "h.entry_points": "入口与路径",
-        "h.mental_model": "一句话心智模型",
-        "h.key_findings": "关键发现",
-        "h.open_questions": "未解问题 / 下次继续",
-        "h.evidence": "引用证据",
-        "h.follow_on_output": "衍生产出",
-        "h.prior_sessions": "历次会话",
-        "h.progress": "本次进展",
-        "h.current_status": "当前状态",
-        "h.resume_here": "下次从这里继续",
-        "h.hypothesis_summary": "假设池摘要",
-        "h.experience_candidates": "经验候选",
-        "h.timeline": "主线时间线",
-        "h.outputs": "产出",
-        "col.decision": "决策",
-        "col.why": "原因",
-        "col.alternatives": "已排除方案",
-        "col.time": "时间",
-        "col.hypothesis": "假设",
-        "col.status": "状态",
-        "col.evidence": "证据",
-        "label.code": "代码",
-        "label.knowledge": "知识",
-        "label.remaining": "遗留",
         "index.title": "工作日志索引",
         "exp.title": "经验库",
         "exp.preamble": "最新优先。废弃时保留原文。过期或错误的内容用 `~~...~~` 标记并注明原因。",

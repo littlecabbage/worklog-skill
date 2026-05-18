@@ -208,31 +208,26 @@ python3 worklog/scripts/hooks_install.py --uninstall
 
 ### 脚本接口
 
-**写入一条会话：** `finish_worklog.py` 从 stdin 或 `--input` 接收 JSON payload：
+**写入一条会话：** `finish_worklog.py` 从 stdin 或 `--input` 接收 JSON payload。新版采用 body-first：你直接给一段 markdown，脚本原样写入：
 
 ```bash
 python3 worklog/scripts/finish_worklog.py <<'EOF'
 {
-  "mode": "mixed",
-  "language": "zh",
+  "mode": "dev",
   "title": "Quick smoke test",
-  "sections": {
-    "timeline": ["init OK"],
-    "outputs": {
-      "code": "",
-      "knowledge": "",
-      "remaining": ""
-    },
-    "experience_candidates": []
-  },
-  "original_goal": "smoke",
-  "final_outcome": "OK",
-  "primary_type": "dev"
+  "status": "completed",
+  "started_at": "2026-05-18T10:00:00+08:00",
+  "duration_minutes": 5,
+  "tags": ["smoke"],
+  "summary": "验证 body-first payload 能写出 worklog 并进入索引。",
+  "body": "## 目标\n\n冒烟测试\n\n## 完成\n\n- 调通 finish_worklog.py\n"
 }
 EOF
 ```
 
-draft-first 的 JSON 可以省略 Claude 能安全补齐的字段。`finish_worklog.py` 会先补默认值，再校验并写入。
+必填字段：`mode` / `title` / `summary` / `body` / `status` / `started_at` / `duration_minutes`。`language` 省略时按 body 的中文字符占比自动推断。`--validate-only` 只校验不写入。
+
+旧的 `sections` payload 已不再支持，脚本遇到会直接报错。
 
 完整字段定义见 [worklog/references/worklog-format.zh.md](worklog/references/worklog-format.zh.md)。
 
@@ -250,12 +245,12 @@ python3 worklog/scripts/search_worklog.py "cache invalidation"
 
 ### 输出语言
 
-主 agent 在 finalize 时判定语言，并填入 payload 的 `language` 字段：
+`language` 字段控制脚本生成的结构性文本（INDEX.md / EXPERIENCES.md 标题、preamble、tag 索引）。`body` 是你写好的 markdown，章节标题用什么语言由你决定。
 
-- `zh`：中文结构标题、表格列名和索引文本
-- `en`：英文结构标题、表格列名和索引文本
+- `zh`：中文结构标题
+- `en`：英文结构标题
 
-中英混合默认 `zh`。语言选择只影响结构性文本，bullet 内容和 frontmatter key 不会被翻译。
+省略字段时脚本按 body 的 CJK 字符占比自动推断（>30% → `zh`，否则 `en`），失败回退 `zh`。frontmatter key 永远是英文。
 
 ## 隐私
 

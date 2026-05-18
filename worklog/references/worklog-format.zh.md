@@ -14,71 +14,92 @@
 
 默认 root 是项目本地：最近 git 仓库的 `.worklog/`；如果不在 git 仓库中，则使用当前目录的 `.worklog/`。只有明确传入 `--root ~/.claude/worklog` 时，才使用全局的本机 store；显式全局 root 会保留 `<project-slug>/YYYY-MM-DD/<task-slug>.md` 分组。
 
-## 通用 worklog frontmatter
+## 三层契约
 
-必填：
-- `id`
-- `mode`
-- `project`
-- `project_path`
-- `title`
-- `started_at`
-- `duration_minutes`
-- `status`
-- `tags`
-- `language`（`en` | `zh`）—— 由主 agent 根据对话语言判定；只影响渲染时的结构性文本（section 标题、表格列名等），不影响内容
+设计上区分三层，每层职责不同：
 
-draft-first 的脚本输入可以省略大部分字段。`finish_worklog.py` 会在校验前补安全默认值：
-- `mode`：`mixed`
-- `project_path`：当前工作目录
-- `title`：`Worklog draft`
-- `started_at`：当前本地时间
-- `duration_minutes`：`0`
-- `status`：`partial`
-- `tags`：按 mode 派生
-- `language`：`zh`（与脚本层 `DEFAULT_LANGUAGE` 一致）
+| 层 | 谁产生 | 用途 |
+|---|---|---|
+| **input payload** | LLM 生成的 JSON | 调用 `finish_worklog.py` 时的输入 |
+| **frontmatter** | 脚本写入 `.md` 顶部 | 长期归档；`reindex_worklog.py` 重建索引时回读 |
+| **index entry** | 脚本写入 `index.json` | `jq` 检索的机器层 |
 
-可选草稿元数据：
-- `mode_confidence`（`high` | `medium` | `low`）
-- `mode_evidence[]`
-- `draft_confirmed`
+只有显式列出的字段会进入 frontmatter / index。其它字段会被静默丢弃（带 stderr warning），不要依赖未声明的字段被持久化。
 
-## 各模式字段
+## Input payload（LLM 生成）
 
-### `dev`
-- `branch`
-- `commits[]`
-- `files_changed[]`
-- `loc.added`
-- `loc.deleted`
-- `pr_url`
+```json
+{
+  "mode": "dev",
+  "title": "把 worklog schema 改成 body-first",
+  "status": "completed",
+  "started_at": "2026-05-18T10:00:00+08:00",
+  "duration_minutes": 30,
+  "tags": ["worklog", "schema"],
+  "language": "zh",
+  "summary": "把 sections dict 改成自由 markdown body，并扩大 index 检索字段。",
+  "search_keywords": ["body-first", "schema 简化"],
+  "body": "## 目标\n\n......\n\n## 完成\n\n- ...",
+  "experiences": [],
+  "meta": {
+    "branch": "main",
+    "pr_url": "https://example.com/pr/1"
+  }
+}
+```
 
-### `read`
-- `read_type`（`survey` | `deep-dive` | `hunt` | `compare`）
-- `target`
-- `target_version`
-- `completion`
+### 必填字段
+- `mode`：`dev` / `read` / `debug-session` / `mixed`
+- `title`：人类可读的一行标题
+- `summary`：1-2 句的可检索摘要，会进 `index.json` 的 worklog 条目
+- `body`：完整的 markdown 正文。**不要以 `---` 开头**，那是 frontmatter 围栏的字符
+- `status`：`completed` / `partial` / `paused` / `blocked` / `abandoned`
+- `started_at`：ISO 8601 时间戳
+- `duration_minutes`：非负整数
 
-### `debug-session`
-- `debug_id`
-- `session_number`
-- `linked_debug_doc`
+### 可选字段
+- `tags[]`：缺省按 mode 派生
+- `language`：`en` / `zh`。**省略时脚本根据 body 中 CJK 字符占比自动推断**（>30% → `zh`，否则 `en`），失败时回退默认 zh
+- `search_keywords[]`：补充检索词，会进 `index.json` 的 worklog 条目
+- `experiences[]`：见下文经验库章节
+- `meta`：模式相关字段（见下）
 
-### `mixed`
-- `original_goal`
-- `final_outcome`
-- `involved[]`
-- `primary_type`
+### `meta` 容忍嵌套与 flat
+脚本同时接受这两种写法：
 
-字段未知时，优先生成一个结构完整的草稿并使用默认值，不要把用户阻塞在填表流程里。只有 mode 低置信度或准备正式写入经验库时，才做有针对性的追问。
+```json
+"meta": {"branch": "main", "pr_url": "..."}
+```
 
-## 正文结构
+```json
+"meta": {"dev": {"branch": "main", "pr_url": "..."}}
+```
+
+未声明的 key（无论顶层还是嵌套）都会被丢弃并 warning。落盘时永远是 flat。
+
+### 模式相关字段（顶层或 meta.<mode>.* 都可）
+- **dev**：`branch` / `commits[]` / `files_changed[]` / `loc.{added,deleted}` / `pr_url`
+- **read**：`read_type` (`survey`/`deep-dive`/`hunt`/`compare`) / `target` / `target_version` / `completion` (0-100)
+- **debug-session**：`debug_id` / `session_number` / `linked_debug_doc`
+- **mixed**：`original_goal` / `final_outcome` / `involved[]` / `primary_type` (`dev`/`read`/`debug`)
+
+### 不再持久化的字段
+以下交互期信号**不再写入 frontmatter**：
+- `mode_confidence` / `mode_evidence`：用于 confirmation UI 给用户看，不落盘
+- `draft_confirmed`：草稿确认是工作流义务（未确认就不调脚本），不靠落盘字段背书
+
+### Legacy `sections` payload
+已废弃并移除。脚本遇到含 `sections` 的输入直接报错，引导迁移到 `body`。
+
+## Body 写作建议
+
+`body` 是自由 markdown，脚本不解析其中结构。下面是各模式的常用章节，**仅供参考，不强制**。模型可根据上下文增删合并；只要 `summary` 写好，检索不依赖正文结构。
 
 ### `dev`
 - 目标
-- 完成情况
+- 完成
 - 关键决策
-- 学到 / 经验候选
+- 经验候选
 - 遗留 TODO
 - 参考
 
@@ -92,18 +113,41 @@ draft-first 的脚本输入可以省略大部分字段。`finish_worklog.py` 会
 - 衍生产出
 
 ### `debug-session`
-- 历次会话
+- 历次会话回顾
 - 本次进展
 - 当前状态
-- 下次会话从这里继续
-- 假设池摘要
+- 下次从这里继续
+- 假设与证据
 - 经验候选
 
 ### `mixed`
 - 主线时间线
 - 关键决策
-- 产出
+- 产出（代码 / 知识 / 遗留）
 - 经验候选
+
+## Frontmatter（脚本生成）
+
+通用：`id` `mode` `project` `project_path` `title` `started_at` `duration_minutes` `status` `tags` `language` `summary` `search_keywords` `produced_experience_ids`
+
+按 mode 追加：见上文"模式相关字段"；脚本会从 payload 的顶层（或 flat 化后的 meta）取对应字段。
+
+## index.json schema
+
+顶层键：`version` `updated_at` `experiences[]` `worklogs[]` `snippets[]` `debug_sessions[]` `stats`
+
+### Worklog 条目字段
+- 通用：`id` `date` `project` `mode` `title` `summary` `search_keywords[]` `tags[]` `duration_minutes` `status` `file` `language` `produced_experience_ids[]`
+- debug-session：`debug_id` `session_number` `linked_debug_doc`
+- dev：`commits[]`（hash 数组）`branch` `pr_url`
+- read：`read_type` `target` `target_version` `completion`
+- mixed：`primary_type` `involved[]`
+
+### Experience 条目字段
+- `id` `title` `summary` `tags[]` `search_keywords[]` `project` `confidence` `status` `date`
+- `location.{file,anchor,line}` `source_worklog_id`
+- `verified_against` `last_verified_at` `supersedes` `superseded_by`
+- `ref_count` `pinned` `deprecated_at` `deprecated_reason`
 
 ## EXPERIENCES.md 规则
 
@@ -132,48 +176,15 @@ deprecated_reason: null
 -->
 ```
 
-## index.json schema
-
-顶层键：
-- `version`
-- `updated_at`
-- `experiences[]`
-- `worklogs[]`
-- `snippets[]`
-- `debug_sessions[]`
-- `stats`
-
-### 经验字段
-- `id`
-- `title`
-- `summary`
-- `tags[]`
-- `search_keywords[]`
-- `project`
-- `confidence`
-- `status`
-- `date`
-- `location.file`
-- `location.anchor`
-- `location.line`
-- `source_worklog_id`
-- `verified_against`
-- `last_verified_at`
-- `supersedes`
-- `superseded_by`
-- `ref_count`
-- `pinned`
-- `deprecated_at`
-- `deprecated_reason`
-
 ## jq 模式
 
 ```bash
 jq '.experiences[] | select(.status=="active" and (.tags|index("sqlalchemy"))) | {id,title,location}' .worklog/index.json
-jq '.worklogs[] | select(.project=="my-project") | {id,date,mode,title,file}' .worklog/index.json
+jq '.worklogs[] | select(.project=="my-project") | {id,date,mode,title,summary,file}' .worklog/index.json
+jq '.worklogs[] | select(.summary | test("body-first"; "i")) | {id,title}' .worklog/index.json
 jq '.experiences[] | select(.confidence=="high") | {id,title,location}' .worklog/index.json
 ```
 
 ## 检索规则
 
-先用 `jq` 缩小候选，再只读取对应 markdown 的锚点或行范围。
+先用 `jq` 在 `index.json` 缩小候选（结合 `summary` / `search_keywords` / `tags` / `mode` / `target`），再只读取对应 markdown 的锚点或行范围。

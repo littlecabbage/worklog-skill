@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -19,10 +18,7 @@ from worklog_lib import (  # noqa: E402
     normalize_language,
     render_experiences_md,
     render_index_md,
-    render_outputs,
-    render_worklog_body,
     t,
-    validate_payload,
 )
 
 FINISH_SCRIPT = REPO_ROOT / "worklog" / "scripts" / "finish_worklog.py"
@@ -30,16 +26,16 @@ FINISH_SCRIPT = REPO_ROOT / "worklog" / "scripts" / "finish_worklog.py"
 
 class HelpersTests(unittest.TestCase):
     def test_t_known_language(self) -> None:
-        self.assertEqual(t("zh", "h.timeline"), "主线时间线")
-        self.assertEqual(t("en", "h.timeline"), "Timeline")
+        self.assertEqual(t("zh", "index.title"), "工作日志索引")
+        self.assertEqual(t("en", "index.title"), "Work Log Index")
 
     def test_t_unknown_language_falls_back_to_default(self) -> None:
-        self.assertEqual(t("fr", "h.timeline"), t(DEFAULT_LANGUAGE, "h.timeline"))
-        self.assertEqual(t(None, "h.timeline"), t(DEFAULT_LANGUAGE, "h.timeline"))
+        self.assertEqual(t("fr", "index.title"), t(DEFAULT_LANGUAGE, "index.title"))
+        self.assertEqual(t(None, "index.title"), t(DEFAULT_LANGUAGE, "index.title"))
 
     def test_t_unknown_key_echoes(self) -> None:
-        self.assertEqual(t("zh", "h.no_such_key"), "h.no_such_key")
-        self.assertEqual(t("en", "h.no_such_key"), "h.no_such_key")
+        self.assertEqual(t("zh", "no_such_key"), "no_such_key")
+        self.assertEqual(t("en", "no_such_key"), "no_such_key")
 
     def test_normalize_language(self) -> None:
         self.assertEqual(normalize_language("zh"), "zh")
@@ -71,110 +67,7 @@ class HelpersTests(unittest.TestCase):
         self.assertEqual(majority_language([]), DEFAULT_LANGUAGE)
 
 
-class RenderTests(unittest.TestCase):
-    def test_mixed_mode_zh_headers(self) -> None:
-        payload = {
-            "mode": "mixed",
-            "language": "zh",
-            "sections": {
-                "timeline": ["a"],
-                "key_decisions": [{"time": "t", "decision": "d", "why": "w"}],
-                "outputs": {"code": "c", "knowledge": "k", "remaining": "r"},
-                "experience_candidates": ["e"],
-            },
-        }
-        body = render_worklog_body(payload)
-        for header in ("## 主线时间线", "## 关键决策", "## 产出", "## 经验候选"):
-            self.assertIn(header, body)
-        self.assertIn("| 时间 | 决策 | 原因 |", body)
-
-    def test_mixed_mode_defaults_to_zh_when_missing_language(self) -> None:
-        payload = {
-            "mode": "mixed",
-            "sections": {
-                "timeline": [],
-                "outputs": {"code": "", "knowledge": "", "remaining": ""},
-                "experience_candidates": [],
-            },
-        }
-        body = render_worklog_body(payload)
-        self.assertIn("## 主线时间线", body)
-
-    def test_dev_mode_en_headers(self) -> None:
-        payload = {
-            "mode": "dev",
-            "language": "en",
-            "sections": {
-                "goal": "g",
-                "completed": [],
-                "key_decisions": [],
-                "learned": [],
-                "remaining_todos": [],
-                "references": [],
-            },
-        }
-        body = render_worklog_body(payload)
-        for header in ("## Goal", "## Completed", "## Key decisions", "## References"):
-            self.assertIn(header, body)
-
-    def test_dev_mode_zh_headers(self) -> None:
-        payload = {
-            "mode": "dev",
-            "language": "zh",
-            "sections": {"goal": "g", "completed": [], "key_decisions": [], "learned": [], "remaining_todos": [], "references": []},
-        }
-        body = render_worklog_body(payload)
-        self.assertIn("## 目标", body)
-        self.assertIn("## 完成情况", body)
-        self.assertIn("## 关键决策", body)
-
-    def test_read_mode_zh_headers(self) -> None:
-        payload = {
-            "mode": "read",
-            "language": "zh",
-            "sections": {
-                "reading_goal": "g",
-                "entry_points": [],
-                "mental_model": "m",
-                "key_findings": [],
-                "open_questions": [],
-                "evidence": [],
-                "follow_on_output": [],
-            },
-        }
-        body = render_worklog_body(payload)
-        self.assertIn("## 阅读目标", body)
-        self.assertIn("## 一句话心智模型", body)
-
-    def test_debug_session_zh_headers(self) -> None:
-        payload = {
-            "mode": "debug-session",
-            "language": "zh",
-            "sections": {
-                "prior_sessions": [],
-                "progress": [],
-                "current_status": "s",
-                "resume_here": [],
-                "hypothesis_summary": [],
-                "experience_candidates": [],
-            },
-        }
-        body = render_worklog_body(payload)
-        self.assertIn("## 历次会话", body)
-        self.assertIn("## 假设池摘要", body)
-
-    def test_render_outputs_zh(self) -> None:
-        out = render_outputs({"code": "a", "knowledge": "b", "remaining": "c"}, "zh")
-        self.assertIn("- 代码: a", out)
-        self.assertIn("- 知识: b", out)
-        self.assertIn("- 遗留: c", out)
-
-    def test_render_outputs_en(self) -> None:
-        out = render_outputs({"code": "a", "knowledge": "b", "remaining": "c"}, "en")
-        self.assertIn("- Code: a", out)
-        self.assertIn("- Knowledge: b", out)
-        self.assertIn("- Remaining: c", out)
-
+class StructuralRenderTests(unittest.TestCase):
     def test_render_index_md_zh(self) -> None:
         md = render_index_md([], "zh")
         self.assertTrue(md.startswith("# 工作日志索引"))
@@ -198,44 +91,6 @@ class RenderTests(unittest.TestCase):
         self.assertIn("- None", md)
 
 
-class ValidationTests(unittest.TestCase):
-    def _payload(self, **overrides) -> dict:
-        base = {
-            "mode": "mixed",
-            "project_path": "/tmp/x",
-            "title": "t",
-            "started_at": "2026-05-17T01:00:00+08:00",
-            "duration_minutes": 1,
-            "status": "completed",
-            "tags": [],
-            "original_goal": "g",
-            "final_outcome": "f",
-            "primary_type": "dev",
-            "sections": {
-                "timeline": [],
-                "outputs": {"code": "", "knowledge": "", "remaining": ""},
-                "experience_candidates": [],
-            },
-        }
-        base.update(overrides)
-        return base
-
-    def test_accepts_zh(self) -> None:
-        validate_payload(self._payload(language="zh"))
-
-    def test_accepts_en(self) -> None:
-        validate_payload(self._payload(language="en"))
-
-    def test_rejects_unsupported(self) -> None:
-        with self.assertRaises(SystemExit):
-            validate_payload(self._payload(language="fr"))
-
-    def test_defaults_when_missing(self) -> None:
-        payload = self._payload()
-        validate_payload(payload)
-        self.assertEqual(payload["language"], DEFAULT_LANGUAGE)
-
-
 class EndToEndTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp(prefix="wl-lang-e2e-"))
@@ -257,8 +112,8 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return Path(result.stdout.strip())
 
-    def test_zh_payload_writes_chinese_markdown(self) -> None:
-        output = self._run_finish({
+    def test_zh_payload_writes_chinese_indexes(self) -> None:
+        self._run_finish({
             "mode": "mixed",
             "language": "zh",
             "project_path": str(self.tmp),
@@ -267,20 +122,9 @@ class EndToEndTests(unittest.TestCase):
             "duration_minutes": 5,
             "status": "completed",
             "tags": [],
-            "original_goal": "g",
-            "final_outcome": "f",
-            "primary_type": "dev",
-            "sections": {
-                "timeline": ["x"],
-                "outputs": {"code": "c", "knowledge": "k", "remaining": "r"},
-                "experience_candidates": [],
-            },
+            "summary": "中文摘要：写一个 worklog 验证语言处理。",
+            "body": "## 主线时间线\n\n- 起步\n- 写入\n",
         })
-        text = output.read_text(encoding="utf-8")
-        self.assertIn('language: "zh"', text)
-        self.assertIn("## 主线时间线", text)
-        self.assertIn("## 产出", text)
-        self.assertIn("- 代码: c", text)
         index_text = (self.tmp / ".worklog" / "INDEX.md").read_text(encoding="utf-8")
         self.assertTrue(index_text.startswith("# 工作日志索引"))
         exp_text = (self.tmp / ".worklog" / "EXPERIENCES.md").read_text(encoding="utf-8")
@@ -297,14 +141,8 @@ class EndToEndTests(unittest.TestCase):
                 "duration_minutes": 1,
                 "status": "completed",
                 "tags": [],
-                "original_goal": "g",
-                "final_outcome": "f",
-                "primary_type": "dev",
-                "sections": {
-                    "timeline": ["x"],
-                    "outputs": {"code": "", "knowledge": "", "remaining": ""},
-                    "experience_candidates": [],
-                },
+                "summary": "English worklog summary for majority test.",
+                "body": "## Timeline\n\n- did some english things\n",
             })
         self._run_finish({
             "mode": "mixed",
@@ -315,14 +153,8 @@ class EndToEndTests(unittest.TestCase):
             "duration_minutes": 1,
             "status": "completed",
             "tags": [],
-            "original_goal": "g",
-            "final_outcome": "f",
-            "primary_type": "dev",
-            "sections": {
-                "timeline": [],
-                "outputs": {"code": "", "knowledge": "", "remaining": ""},
-                "experience_candidates": [],
-            },
+            "summary": "一个中文 worklog 用作少数语言。",
+            "body": "## 主线\n\n- 中文记录\n",
         })
         index_text = (self.tmp / ".worklog" / "INDEX.md").read_text(encoding="utf-8")
         self.assertTrue(index_text.startswith("# Work Log Index"))

@@ -193,28 +193,25 @@ Same `--project` / `--global` / `--dry-run` flags as `init_worklog.py`.
 
 ### Script interface
 
-**Record a session:** `finish_worklog.py` accepts JSON via stdin or `--input`:
+**Record a session:** `finish_worklog.py` accepts JSON via stdin or `--input`. The new schema is body-first: hand it a markdown string and it writes verbatim under generated frontmatter:
 
 ```bash
 python3 worklog/scripts/finish_worklog.py <<'EOF'
 {
   "mode": "dev",
-  "language": "en",
   "title": "Implement soft delete for users",
   "started_at": "2026-05-12T09:30:00+08:00",
   "duration_minutes": 90,
   "status": "completed",
   "tags": ["dev", "backend"],
-  "sections": {
-    "goal": "Add soft delete support for users.",
-    "completed": ["Added deleted_at column.", "Updated service queries."],
-    "key_decisions": [{"decision": "Nullable timestamp", "why": "preserves deletion time"}]
-  }
+  "summary": "Added soft-delete columns and updated service queries.",
+  "body": "## Goal\n\nAdd soft delete support for users.\n\n## Done\n\n- Added deleted_at column\n- Updated service queries\n",
+  "meta": {"branch": "feature/soft-delete"}
 }
 EOF
 ```
 
-Draft-first payloads can omit fields that the script can safely default before validation.
+Required: `mode` / `title` / `summary` / `body` / `status` / `started_at` / `duration_minutes`. `language` is auto-detected from the body's CJK ratio when omitted. Pass `--validate-only` to check a payload without writing.
 
 Example for `read` mode:
 
@@ -222,28 +219,19 @@ Example for `read` mode:
 python3 worklog/scripts/finish_worklog.py <<'EOF'
 {
   "mode": "read",
-  "language": "en",
   "title": "Understand scheduler wake-up path",
   "started_at": "2026-05-12T09:00:00+08:00",
   "duration_minutes": 55,
   "status": "partial",
   "tags": ["read", "scheduler"],
-  "read_type": "deep-dive",
-  "target": "my-repo",
-  "target_version": "main",
-  "completion": 70,
-  "sections": {
-    "reading_goal": "Understand why delayed jobs wake late.",
-    "entry_points": ["scheduler.py:120", "queue.py:44"],
-    "mental_model": "Wake-up time is calculated once, then adjusted only after dequeue.",
-    "key_findings": ["Clock skew is not the issue.", "Late wake-ups start after retry backoff."],
-    "open_questions": ["Need to confirm whether backoff mutates in place."],
-    "evidence": ["scheduler.py:120-178", "queue.py:44-80"],
-    "follow_on_output": ["Add one experience if the backoff mutation is confirmed."]
-  }
+  "summary": "Late wake-ups originate after retry backoff; need to confirm whether backoff mutates in place.",
+  "body": "## Reading goal\n\nUnderstand why delayed jobs wake late.\n\n## Entry points\n\n- scheduler.py:120\n- queue.py:44\n\n## Mental model\n\nWake-up time is calculated once, then adjusted only after dequeue.\n\n## Key findings\n\n- Clock skew is not the issue.\n- Late wake-ups start after retry backoff.\n",
+  "meta": {"read_type": "deep-dive", "target": "my-repo", "target_version": "main", "completion": 70}
 }
 EOF
 ```
+
+The legacy `sections` payload has been removed; the script now exits with an error if it appears.
 
 Full field definitions at [worklog/references/worklog-format.md](worklog/references/worklog-format.md).
 
@@ -261,7 +249,7 @@ python3 worklog/scripts/search_worklog.py "cache invalidation"
 
 ### Output language
 
-The main agent infers the conversation language at finalize time and writes `language` (`zh` or `en`) into the payload. Mixed or unclear conversations default to `zh`. Only structural text (section headers, table column names, INDEX / EXPERIENCES preamble) is affected; bullet content and frontmatter keys stay as written.
+The `language` field controls only structural text the script generates (INDEX.md / EXPERIENCES.md headings, preamble, tag-index labels). The body is whatever markdown you wrote. When `language` is omitted, the script auto-detects from the body's CJK character ratio (>30% → `zh`, otherwise `en`), falling back to `zh` if detection fails. Frontmatter keys are always English.
 
 ## Privacy
 

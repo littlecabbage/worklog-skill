@@ -18,10 +18,10 @@ description: Persist and retrieve Claude Code work logs and reusable experiences
 4. Show one compact confirmation containing:
    - inferred `mode`, `mode_confidence`, and 2-5 evidence bullets
    - generated title, status, tags, and duration if available
-   - 3-6 session summary bullets
+   - 3-6 session summary bullets (these become the `summary` and the body's leading sections)
    - 0-2 experience candidates marked as pending
 5. Ask only one question by default: "Save this draft, edit mode/title/tags, or discard it?"
-6. Write the session log to `<project-root>/.worklog/YYYY-MM-DD/<task-slug>.md` only after confirmation.
+6. Write the session log to `<project-root>/.worklog/YYYY-MM-DD/<task-slug>.md` only after confirmation. **Do not invoke `finish_worklog.py` before the user confirms** — confirmation is a workflow obligation, not a stored flag. `mode_confidence` / `mode_evidence` are shown in the UI but not persisted.
 7. After a successful save, archive the capture draft by moving `.worklog/draft/<current_session_id>/` to `.worklog/draft/.archived/<current_session_id>/`.
 8. Update `INDEX.md` in newest-first order.
 9. Promote reusable findings into `EXPERIENCES.md` and `index.json` only when the user explicitly confirms the experience candidates.
@@ -37,17 +37,15 @@ Do not start `/worklog` by asking for title, status, tags, or mode. Generate the
 
 ## Language detection
 
-Before finalizing, detect the dominant language of the current Claude Code conversation (user prompts plus your own replies) and set `language` on the payload:
+Detect the dominant language of the current Claude Code conversation (user prompts plus your own replies) and set `language` on the payload:
 
 - Predominantly Chinese → `language: "zh"`
 - Predominantly English → `language: "en"`
-- Mixed signals or unclear → **default to `"zh"`** (this is also the script-level fallback)
+- Mixed signals or unclear → omit the field; the script auto-detects from the body's CJK character ratio (>30% → `zh`, otherwise `en`), falling back to `zh` if detection is inconclusive.
 
-`language` controls only structural text in the output: section headers (`## Goal` / `## 目标`), table column names, inline output labels (`Code` / `代码`), and the INDEX.md / EXPERIENCES.md headings and preamble. Bullet content, decisions, and free-text fields stay in whichever language you wrote them. Frontmatter keys (`mode`, `title`, `status`, `tags`, etc.) always remain English.
+`language` controls only structural text the script generates (INDEX.md / EXPERIENCES.md headings, preamble, tag-index labels). The body itself is whatever markdown you wrote — author headings in the conversation language directly. Frontmatter keys (`mode`, `title`, `status`, `tags`, etc.) always remain English.
 
-`INDEX.md` and `EXPERIENCES.md` are rebuilt from all worklogs on each save; their language follows the majority across worklog frontmatter, with `zh` winning ties.
-
-The payload field is forwarded by `apply_payload_defaults` and validated by `validate_payload`; if you omit it the renderer falls back to the default language. Supported values: `en`, `zh`.
+`INDEX.md` and `EXPERIENCES.md` are rebuilt from all worklogs on each save; their language follows the majority across worklog frontmatter, with `zh` winning ties. Supported values: `en`, `zh`.
 
 ## Mode selection
 - `dev`: the main outcome is code changes.
@@ -61,7 +59,7 @@ Score every candidate mode from evidence:
 - errors, reproduction steps, hypotheses, root cause, or verification of a fix point to `debug-session`
 - strong evidence from multiple categories points to `mixed`
 
-Prefer `mixed` as the fallback instead of introducing a new general mode. Include `mode_confidence` as `high`, `medium`, or `low`, and include `mode_evidence` in the JSON payload when saving.
+Prefer `mixed` as the fallback instead of introducing a new general mode. Show `mode_confidence` (`high` / `medium` / `low`) and `mode_evidence` (2-5 bullets) in the confirmation UI; these are not persisted in frontmatter and should not be included in the saved payload.
 
 ## Record rules
 - Default to project-local storage. Resolve the root as the nearest git repository's `.worklog/`; if no git root exists, use the current directory's `.worklog/`.
@@ -84,8 +82,23 @@ Prefer `mixed` as the fallback instead of introducing a new general mode. Includ
 ## Scripts
 - Run `python3 scripts/init_worklog.py` to set up the worklog in the current project: create the `.worklog/` skeleton, install capture hooks, and patch `.gitignore`. Supports `--skip-hooks`, `--skip-gitignore`, `--global`, `--dry-run`, and `--uninstall` (uninstall reverses the install but preserves `.worklog/` data).
 - Run `python3 scripts/hooks_install.py` directly when you only need to manage capture hooks without touching the worklog skeleton. Same scope flags as `init_worklog.py`.
-- Run `python3 scripts/finish_worklog.py --input <file.json>` or pipe JSON on stdin to append one worklog, update `INDEX.md`, update `EXPERIENCES.md`, and refresh `index.json`.
-- The script accepts draft-first payloads with missing optional fields and fills safe defaults before validation. Still provide richer fields when context supports them.
+- Run `python3 scripts/finish_worklog.py --input <file.json>` or pipe JSON on stdin to append one worklog, update `INDEX.md`, update `EXPERIENCES.md`, and refresh `index.json`. Pass `--validate-only` to check a payload without writing anything.
+- **Use the body-first payload.** The script writes your `body` markdown verbatim under generated frontmatter; it does not parse the body. Required: `mode`, `title`, `summary` (1-2 sentences, used for retrieval), `body` (non-empty markdown that does not start with `---`), `status`, `started_at`, `duration_minutes`. Optional: `tags`, `language`, `search_keywords`, `experiences`, `meta`. Schema details and a worked example: `references/worklog-format.zh.md` (and `.md` for English).
+
+  Minimal example (stdin):
+  ```json
+  {
+    "mode": "dev",
+    "title": "Switch worklog schema to body-first",
+    "status": "completed",
+    "started_at": "2026-05-18T10:00:00+08:00",
+    "duration_minutes": 30,
+    "tags": ["worklog", "schema"],
+    "summary": "Replace the sections dict with free-form markdown body and broaden index search fields.",
+    "body": "## 目标\n\n...\n\n## 完成\n\n- ..."
+  }
+  ```
+- The legacy `sections`-based payload has been removed. Passing `sections` now exits with an error directing you to migrate.
 - Run `python3 scripts/reindex_worklog.py` to rebuild `INDEX.md` and `index.json` from markdown.
 - Use JSON input for deterministic writes. Prefer generating the JSON payload in-memory or through a temp file rather than editing markdown manually.
 - Pass `--root ~/.claude/worklog` when a global machine-local worklog is intentionally desired.
